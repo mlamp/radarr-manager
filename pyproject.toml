@@ -1,0 +1,63 @@
+[project]
+name = "radarr-manager"
+version = "0.1.0"
+description = "CLI helpers for discovering and managing blockbuster movie lists in Radarr."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+  { name = "Margus" }
+]
+dependencies = [
+  "typer[all]>=0.12",
+  "httpx[http2]>=0.27",
+  "pydantic>=2.7",
+  "tenacity>=9.0",
+  "python-dotenv>=1.0",
+  "openai>=1.44",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.23",
+  "pytest-httpx>=0.29",
+  "respx>=0.21",
+  "ruff>=0.6",
+  "black>=24.8",
+  "coverage[toml]>=7.6"
+]
+
+[project.scripts]
+radarr-manager = "radarr_manager.cli.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+exclude = '(\.venv|build|dist)'
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = ["E", "F", "I", "UP", "B", "W"]
+ignore = ["B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["radarr_manager"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --disable-warnings"
+markers = [
+  "integration: marks integration tests that hit live services"
+]
+
+[tool.coverage.run]
+branch = true
+source = ["radarr_manager"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

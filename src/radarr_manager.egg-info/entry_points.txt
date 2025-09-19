@@ -1,0 +1,2 @@
+[console_scripts]
+radarr-manager = radarr_manager.cli.__main__:main
