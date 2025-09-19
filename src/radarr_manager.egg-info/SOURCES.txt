@@ -24,3 +24,4 @@ src/radarr_manager/services/__init__.py
 src/radarr_manager/services/discovery.py
 src/radarr_manager/services/sync.py
 tests/test_cli_smoke.py
+tests/test_integration.py

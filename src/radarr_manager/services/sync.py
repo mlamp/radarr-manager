@@ -108,11 +108,11 @@ class SyncService:
                 await self._client.ensure_movie(payload)
             except httpx.HTTPStatusError as exc:
                 try:
-                    payload = exc.response.json()
+                    error_details = exc.response.json()
                 except ValueError:  # response was not JSON
-                    payload = exc.response.text
+                    error_details = exc.response.text
                 errors.append(
-                    f"{suggestion.title}: {exc} — {payload}",
+                    f"{suggestion.title}: {exc} — {error_details}",
                 )
             except Exception as exc:  # pragma: no cover - best-effort logging path
                 errors.append(f"{suggestion.title}: {exc}")

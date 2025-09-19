@@ -100,8 +100,6 @@ def build_add_movie_payload(
 ) -> dict[str, Any]:
     """Assemble the payload expected by Radarr's POST /movie endpoint."""
 
-    monitor_mode = "movieOnly" if monitor else "none"
-
     payload = {
         "tmdbId": lookup.get("tmdbId"),
         "title": lookup.get("title"),
@@ -112,7 +110,7 @@ def build_add_movie_payload(
         "rootFolderPath": root_folder_path,
         "addOptions": {
             "searchForMovie": False,
-            "monitor": monitor_mode,
+            "monitor": "movieOnly" if monitor else "none",
         },
     }
     if minimum_availability:
