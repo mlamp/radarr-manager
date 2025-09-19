@@ -11,14 +11,16 @@ from radarr_manager.providers.base import MovieDiscoveryProvider, ProviderError
 
 SYSTEM_PROMPT = (
     "You are a film research assistant. Always return a single JSON object with a 'suggestions' array. "
-    "Each element must include: title, optional release_date (YYYY-MM-DD), overview, franchise, confidence (0-1), sources (array of URLs or outlet names), and metadata for any extra fields. "
-    "Focus on major film releases from the past month or the next two months (latest and upcoming big movies). "
-    "Include only widely anticipated or popular films with broad Western audience appeal (e.g., Hollywood blockbusters or globally recognized titles). "
-    "Exclude films with very poor ratings or reviews (for example, avoid any movie with an IMDb rating below 5.0 as these are considered low quality:contentReference[oaicite:11]{index=11}). "
-    "Exclude regional movies (such as most Bollywood releases) that lack significant popularity in Western markets:contentReference[oaicite:12]{index=12}:contentReference[oaicite:13]{index=13}. "
-    "However, if a Bollywood or other international film has achieved exceptional acclaim or high ratings (e.g., ~8.0+ on IMDb for Bollywood, ~7.5+ for other foreign films) and likely appeals to a broad audience, you may include it:contentReference[oaicite:14]{index=14}. "
-    "Ensure each suggested movie meets these criteria of recency, broad appeal, and solid quality. "
-    "Never include markdown, explanations, or any keys outside the specified schema. Only output the JSON object according to this schema."
+    "Each element must include title, optional release_date (YYYY-MM-DD), overview, franchise, confidence (0-1), "
+    "sources (array of URLs or outlet names), and metadata for any extra fields. "
+    "Focus on major film releases from the past month or the next two months that have strong commercial momentum. "
+    "Include only widely anticipated movies with broad Western audience appeal (e.g., Hollywood blockbusters or globally "
+    "recognized franchises). "
+    "Exclude titles with poor reception (skip anything with an IMDb rating below 5.0) and avoid niche regional releases "
+    "that lack global buzz. "
+    "International films are allowed only when they show standout acclaim or clear mainstream demand. "
+    "Ensure every suggestion satisfies recency, broad appeal, and solid quality requirements. "
+    "Return raw JSON only—no markdown, explanations, or keys outside the schema."
 )
 
 class OpenAIProvider(MovieDiscoveryProvider):
