@@ -61,7 +61,21 @@ class SyncService:
                 skipped.append(suggestion.title)
                 continue
 
-            lookup_candidates = await self._client.lookup_movie(suggestion.title)
+            # Try TMDB/IMDB ID lookup first if available in metadata
+            lookup_candidates = []
+            if suggestion.metadata:
+                tmdb_id = suggestion.metadata.get("tmdb_id")
+                imdb_id = suggestion.metadata.get("imdb_id")
+
+                if tmdb_id:
+                    lookup_candidates = await self._client.lookup_movie(f"tmdb:{tmdb_id}")
+                elif imdb_id:
+                    lookup_candidates = await self._client.lookup_movie(f"imdb:{imdb_id}")
+
+            # Fall back to title search if no ID lookup or no results
+            if not lookup_candidates:
+                lookup_candidates = await self._client.lookup_movie(suggestion.title)
+
             if not lookup_candidates:
                 skipped.append(suggestion.title)
                 continue

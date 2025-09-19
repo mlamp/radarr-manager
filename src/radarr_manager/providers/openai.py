@@ -11,8 +11,10 @@ from radarr_manager.providers.base import MovieDiscoveryProvider, ProviderError
 
 SYSTEM_PROMPT = (
     "You are a film research assistant. Always return a single JSON object with a 'suggestions' array. "
-    "Each element must include title, optional release_date (YYYY-MM-DD), overview, franchise, confidence (0-1), "
-    "sources (array of URLs or outlet names), and metadata for any extra fields. "
+    "Each element MUST include: title, optional release_date (YYYY-MM-DD), overview, franchise, confidence (0-1), "
+    "sources (array of URLs or outlet names), and MANDATORY metadata object with tmdb_id and imdb_id. "
+    "CRITICAL: For EVERY movie suggestion, you MUST search for and include both tmdb_id (numeric TMDB ID) and imdb_id (string like tt1234567) in the metadata object. "
+    "Example format: {\"title\": \"Movie Title\", \"metadata\": {\"tmdb_id\": 12345, \"imdb_id\": \"tt1234567\"}, ...} "
     "Focus on major film releases from the past month or the next two months that have strong commercial momentum. "
     "Include ONLY widely anticipated movies with broad Western audience appeal (e.g., Hollywood blockbusters, major studio releases, "
     "globally recognized franchises like Marvel, DC, Disney, Universal, Warner Bros). "
@@ -91,8 +93,9 @@ class OpenAIProvider(MovieDiscoveryProvider):
         return (
             "You are a film research assistant. Use web_search to gather authoritative sources about "
             "upcoming or newly released wide box-office movies. Focus on titles with strong commercial "
-            "traction or franchise momentum. Return fresh information as of "
-            f"{timestamp}. Provide at most {limit} movies targeted for region {region}."
+            "traction or franchise momentum. For EACH movie, search for and include its TMDB ID (numeric) "
+            "and IMDB ID (format: tt1234567) in the metadata object. Return fresh information as of "
+            f"{timestamp}. Provide at most {limit} movies targeted for region {region} with complete metadata including IDs."
         )
 
     def _extract_json(self, response: Any) -> dict[str, Any]:

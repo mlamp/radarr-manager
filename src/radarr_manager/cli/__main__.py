@@ -177,6 +177,16 @@ def _render_discover_results(
         if suggestion.sources:
             typer.echo(f"   sources: {', '.join(suggestion.sources)}")
 
+        # Display TMDB/IMDB IDs if available in metadata
+        if suggestion.metadata:
+            ids = []
+            if tmdb_id := suggestion.metadata.get("tmdb_id"):
+                ids.append(f"tmdb:{tmdb_id}")
+            if imdb_id := suggestion.metadata.get("imdb_id"):
+                ids.append(f"imdb:{imdb_id}")
+            if ids:
+                typer.echo(f"   ids: {', '.join(ids)}")
+
 
 async def _run_sync(
     *,
