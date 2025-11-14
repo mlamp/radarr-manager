@@ -19,6 +19,25 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 
 ## Installation
 
+### Option 1: Docker (Recommended)
+
+```bash
+# Pull the latest image
+docker pull mlamp/radarr-manager:latest
+
+# Run with environment variables
+docker run --rm \
+  -e RADARR_BASE_URL="http://your-radarr:7878" \
+  -e RADARR_API_KEY="your-api-key" \
+  -e OPENAI_API_KEY="your-openai-key" \
+  mlamp/radarr-manager:latest discover --limit 5
+
+# Or use a .env file
+docker run --rm --env-file .env mlamp/radarr-manager:latest sync --dry-run
+```
+
+### Option 2: Python Installation
+
 ```bash
 # Create virtual environment (Python 3.12+ required)
 python -m venv .venv
@@ -173,6 +192,71 @@ radarr-manager sync --limit 3
 **Force add duplicates**:
 ```bash
 radarr-manager sync --force --limit 2
+```
+
+## Docker Usage
+
+### Running with Docker
+
+The Docker image is available at `mlamp/radarr-manager` on Docker Hub.
+
+**Basic usage:**
+```bash
+docker run --rm mlamp/radarr-manager:latest --help
+```
+
+**Discover movies:**
+```bash
+docker run --rm \
+  -e RADARR_BASE_URL="http://192.168.1.100:7878" \
+  -e RADARR_API_KEY="your-radarr-api-key" \
+  -e OPENAI_API_KEY="your-openai-api-key" \
+  mlamp/radarr-manager:latest discover --limit 10
+```
+
+**Sync with dry-run:**
+```bash
+docker run --rm --env-file .env \
+  mlamp/radarr-manager:latest sync --dry-run --limit 5
+```
+
+**Using environment file:**
+```bash
+# Create .env file with your configuration
+docker run --rm --env-file .env \
+  mlamp/radarr-manager:latest sync --limit 3
+```
+
+### Docker Compose
+
+Example `docker-compose.yml` for scheduled runs:
+
+```yaml
+version: '3.8'
+
+services:
+  radarr-manager:
+    image: mlamp/radarr-manager:latest
+    environment:
+      - RADARR_BASE_URL=http://radarr:7878
+      - RADARR_API_KEY=${RADARR_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=gpt-4o-mini
+      - RADARR_QUALITY_PROFILE_ID=4
+      - RADARR_ROOT_FOLDER_PATH=/movies
+      - RADARR_TAGS=auto-boxoffice
+    command: sync --limit 5
+    # Optionally schedule with cron or external scheduler
+```
+
+### Building from Source
+
+```bash
+# Build the image
+docker build -t radarr-manager:local .
+
+# Run your local build
+docker run --rm --env-file .env radarr-manager:local discover
 ```
 
 ## Development Workflow
