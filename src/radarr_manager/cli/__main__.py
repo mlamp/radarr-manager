@@ -102,6 +102,52 @@ def sync(
 
 
 @app.command()
+def add(
+    title: str | None = typer.Option(None, help="Movie title to search for."),
+    year: int | None = typer.Option(None, help="Release year (used with --title for better accuracy)."),
+    tmdb_id: int | None = typer.Option(None, help="TMDB ID (e.g., 123456)."),
+    imdb_id: str | None = typer.Option(None, help="IMDB ID (e.g., tt1234567)."),
+    dry_run: bool = typer.Option(True, help="Preview actions without modifying Radarr."),
+    force: bool = typer.Option(False, help="Add movie even if a potential duplicate is detected."),
+    debug: bool = typer.Option(False, help="Enable debug logging."),
+) -> None:
+    """Manually add a movie to Radarr by title, TMDB ID, or IMDB ID."""
+    if debug:
+        _setup_logging(logging.INFO)
+
+    # Validate input: must provide either (title) or (tmdb_id) or (imdb_id)
+    if not any([title, tmdb_id, imdb_id]):
+        typer.secho(
+            "Error: Must provide either --title, --tmdb-id, or --imdb-id",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    load_result = _safe_load_settings()
+    if load_result is None:
+        raise typer.Exit(code=1)
+
+    settings = load_result.settings
+    try:
+        settings.require_radarr()
+    except SettingsError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
+
+    asyncio.run(
+        _run_add(
+            settings=settings,
+            title=title,
+            year=year,
+            tmdb_id=tmdb_id,
+            imdb_id=imdb_id,
+            dry_run=dry_run,
+            force=force,
+        ),
+    )
+
+
+@app.command()
 def config(show_sources: bool = typer.Option(False, help="Display provider hints.")) -> None:
     """Describe configuration expectations."""
     load_result = _safe_load_settings(load_even_if_missing=True)
@@ -253,6 +299,115 @@ async def _run_sync(
         typer.secho("Errors:", fg=typer.colors.RED)
         for reason in summary.errors:
             typer.echo(f"  - {reason}")
+
+
+async def _run_add(
+    *,
+    settings: Settings,
+    title: str | None,
+    year: int | None,
+    tmdb_id: int | None,
+    imdb_id: str | None,
+    dry_run: bool,
+    force: bool,
+) -> None:
+    """Add a single movie to Radarr by lookup."""
+    assert settings.radarr_base_url is not None
+    assert settings.radarr_api_key is not None
+
+    # Build search term based on provided parameters
+    if tmdb_id:
+        search_term = f"tmdb:{tmdb_id}"
+        typer.echo(f"Searching for movie with TMDB ID: {tmdb_id}")
+    elif imdb_id:
+        search_term = f"imdb:{imdb_id}"
+        typer.echo(f"Searching for movie with IMDB ID: {imdb_id}")
+    elif title:
+        if year:
+            search_term = f"{title} {year}"
+            typer.echo(f"Searching for movie: {title} ({year})")
+        else:
+            search_term = title
+            typer.echo(f"Searching for movie: {title}")
+    else:
+        typer.secho("Error: No search criteria provided", fg=typer.colors.RED)
+        return
+
+    async with RadarrClient(
+        base_url=settings.radarr_base_url,
+        api_key=settings.radarr_api_key,
+    ) as client:
+        # Lookup movie
+        try:
+            results = await client.lookup_movie(search_term)
+        except Exception as exc:
+            typer.secho(f"Error looking up movie: {exc}", fg=typer.colors.RED)
+            return
+
+        if not results:
+            typer.secho("No movies found matching search criteria.", fg=typer.colors.YELLOW)
+            return
+
+        # Display results and let user pick if multiple matches
+        if len(results) > 1:
+            typer.echo(f"\nFound {len(results)} matches:")
+            for idx, result in enumerate(results, start=1):
+                movie_title = result.get("title", "Unknown")
+                movie_year = result.get("year", "Unknown")
+                typer.echo(f"  {idx}. {movie_title} ({movie_year})")
+            typer.echo("\nUsing first match. Use --tmdb-id or --imdb-id for exact matching.")
+
+        # Use first result
+        movie_data = results[0]
+        movie_title = movie_data.get("title", "Unknown")
+        movie_year = movie_data.get("year", "Unknown")
+
+        typer.secho(f"\nFound: {movie_title} ({movie_year})", fg=typer.colors.GREEN)
+
+        # Display movie details
+        if overview := movie_data.get("overview"):
+            typer.echo(f"Overview: {overview[:200]}{'...' if len(overview) > 200 else ''}")
+
+        # Convert lookup result to MovieSuggestion for sync
+        suggestion = MovieSuggestion(
+            title=movie_title,
+            year=movie_year if isinstance(movie_year, int) else None,
+            overview=movie_data.get("overview", ""),
+            franchise=movie_data.get("studio", ""),
+            confidence=1.0,  # Manual addition = full confidence
+            sources=["manual"],
+            metadata={
+                "tmdb_id": movie_data.get("tmdbId"),
+                "imdb_id": movie_data.get("imdbId"),
+            },
+        )
+
+        # Use SyncService to add the movie
+        service = SyncService(
+            client,
+            quality_profile_id=settings.quality_profile_id,
+            root_folder_path=settings.root_folder_path,
+            monitor=settings.monitor,
+            minimum_availability=settings.minimum_availability,
+            tags=settings.tags,
+        )
+
+        summary = await service.sync([suggestion], dry_run=dry_run, force=force)
+
+        # Display results
+        if dry_run:
+            typer.secho("\n[DRY RUN] No changes made to Radarr", fg=typer.colors.CYAN)
+
+        if summary.queued:
+            typer.secho(f"✓ Successfully queued: {movie_title}", fg=typer.colors.GREEN)
+        elif summary.skipped:
+            typer.secho(f"⊘ Skipped: {movie_title}", fg=typer.colors.YELLOW)
+            if summary.skipped:
+                typer.echo(f"   Reason: {summary.skipped[0]}")
+        elif summary.errors:
+            typer.secho(f"✗ Error adding: {movie_title}", fg=typer.colors.RED)
+            if summary.errors:
+                typer.echo(f"   Error: {summary.errors[0]}")
 
 
 if __name__ == "__main__":

@@ -18,10 +18,10 @@ SYSTEM_PROMPT = (
     "sources (array of URLs or outlet names), and MANDATORY metadata object with tmdb_id and imdb_id. "
     "CRITICAL: For EVERY movie suggestion, you MUST search for and include both tmdb_id (numeric TMDB ID) and imdb_id (string like tt1234567) in the metadata object. "
     "Example format: {\"title\": \"Movie Title\", \"metadata\": {\"tmdb_id\": 12345, \"imdb_id\": \"tt1234567\"}, ...} "
-    "Focus on major film releases from the past month or the next four months that have strong commercial momentum. "
-    "Include widely anticipated movies with broad Western audience appeal including: Hollywood blockbusters, major studio releases, "
-    "globally recognized franchises (Marvel, DC, Disney, Universal, Warner Bros), AND prestige films from acclaimed studios "
-    "(Lionsgate, A24, Sony Pictures, Neon, Searchlight Pictures, Focus Features). "
+    "Focus on major film releases from the past three months or the next four months that have strong commercial momentum. "
+    "Include: blockbusters, franchises (Marvel, DC, Disney, Universal, Warner Bros), prestige films (Lionsgate, A24, Sony Pictures, "
+    "Neon, Searchlight, Focus Features, Aura Entertainment, IFC, Bleecker Street), AND well-reviewed mid-budget theatrical releases "
+    "(IMDb 7.0+/RT 60%+) with recognizable casts, including action-comedies, dramedies, and genre films. Prioritize quality over budget. "
     "QUALITY REQUIREMENTS: For released movies, exclude those with IMDb ratings below 6.5/10. "
     "For PRE-RELEASE movies (no IMDb rating yet), include them if they meet ANY of these criteria: "
     "(1) Major studio tentpole/franchise film, (2) A-list cast or acclaimed director, (3) Strong marketing buzz or trailer views, "
@@ -132,11 +132,11 @@ class OpenAIProvider(MovieDiscoveryProvider):
     def _build_prompt(self, *, limit: int, region: str) -> str:
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         return (
-            "You are a film research assistant. Use web_search to gather authoritative sources about "
-            "upcoming or newly released wide box-office movies. Focus on titles with strong commercial "
-            "traction or franchise momentum. For EACH movie, search for and include its TMDB ID (numeric) "
-            "and IMDB ID (format: tt1234567) in the metadata object. Return fresh information as of "
-            f"{timestamp}. Provide at most {limit} movies targeted for region {region} with complete metadata including IDs."
+            "Use web_search for upcoming/recent wide theatrical movies. Search: box office predictions, IMDb/TMDB, "
+            "Rotten Tomatoes (https://www.rottentomatoes.com/browse/movies_in_theaters for currently playing), "
+            "and recent 2025 theatrical releases from Aug-Nov. Include blockbusters, franchises, prestige films, AND "
+            f"mid-budget releases (action-comedies, dramedies). TMDB/IMDB IDs required. {timestamp}. "
+            f"Max {limit} movies for region {region}."
         )
 
     def _extract_json(self, response: Any) -> dict[str, Any]:

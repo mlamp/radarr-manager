@@ -130,7 +130,7 @@ class TestOpenAIProviderDiscover:
         # Check user prompt
         assert input_messages[1]["role"] == "user"
         user_prompt = input_messages[1]["content"][0]["text"]
-        assert "at most 2 movies" in user_prompt
+        assert "Max 2 movies" in user_prompt
         assert "region US" in user_prompt
 
     @pytest.mark.asyncio
@@ -321,7 +321,7 @@ class TestOpenAIJSONExtraction:
         """Test JSON extraction fails with empty output content."""
         response = MockOpenAIResponse(output_content="")
 
-        with pytest.raises(ProviderError, match="Unable to parse structured response from OpenAI"):
+        with pytest.raises(ProviderError, match="OpenAI response did not include output content"):
             openai_provider._extract_json(response)
 
 
@@ -335,9 +335,9 @@ class TestOpenAIBuildPrompt:
 
             prompt = openai_provider._build_prompt(limit=5, region="EU")
 
-            assert "film research assistant" in prompt
             assert "web_search" in prompt
-            assert "at most 5 movies" in prompt
+            assert "theatrical movies" in prompt
+            assert "Max 5 movies" in prompt
             assert "region EU" in prompt
             assert "2024-09-19 16:30 UTC" in prompt
 
@@ -348,7 +348,7 @@ class TestOpenAIBuildPrompt:
 
             prompt = openai_provider._build_prompt(limit=10, region="CA")
 
-            assert "at most 10 movies" in prompt
+            assert "Max 10 movies" in prompt
             assert "region CA" in prompt
             assert "2024-12-25 12:00 UTC" in prompt
 
