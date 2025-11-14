@@ -29,18 +29,10 @@ class SyncService:
         self._tags = list(tags or [])
 
     async def sync(self, suggestions: list[MovieSuggestion], *, dry_run: bool, force: bool) -> SyncSummary:
-        if dry_run:
-            queued = [suggestion.title for suggestion in suggestions]
-            return SyncSummary(dry_run=True, queued=queued)
-
-        if self._quality_profile_id is None or self._root_folder_path is None:
+        if not dry_run and (self._quality_profile_id is None or self._root_folder_path is None):
             raise RuntimeError(
                 "quality_profile_id and root_folder_path must be configured for live sync operations",
             )
-
-        if not force:
-            # TODO: integrate duplicate detection before insert operations.
-            pass
 
         queued: list[str] = []
         skipped: list[str] = []
@@ -61,26 +53,29 @@ class SyncService:
                 skipped.append(suggestion.title)
                 continue
 
-            # Try TMDB/IMDB ID lookup first if available in metadata
-            lookup_candidates = []
-            if suggestion.metadata:
-                tmdb_id = suggestion.metadata.get("tmdb_id")
-                imdb_id = suggestion.metadata.get("imdb_id")
-
-                if tmdb_id:
-                    lookup_candidates = await self._client.lookup_movie(f"tmdb:{tmdb_id}")
-                elif imdb_id:
-                    lookup_candidates = await self._client.lookup_movie(f"imdb:{imdb_id}")
-
-            # Fall back to title search if no ID lookup or no results
-            if not lookup_candidates:
-                lookup_candidates = await self._client.lookup_movie(suggestion.title)
+            # Always use title-based lookup instead of trusting LLM-provided IDs
+            # LLMs frequently hallucinate TMDB/IMDB IDs, leading to wrong movie matches
+            # Radarr's search API handles fuzzy matching and returns authoritative IDs
+            lookup_candidates = await self._client.lookup_movie(suggestion.title)
 
             if not lookup_candidates:
                 skipped.append(suggestion.title)
                 continue
 
-            lookup = lookup_candidates[0]
+            # Prefer candidates that match the suggested year (fuzzy matching)
+            # If suggestion has a year, prioritize results within 1 year tolerance
+            lookup = None
+            if suggestion.year and lookup_candidates:
+                for candidate in lookup_candidates:
+                    candidate_year = candidate.get("year")
+                    if candidate_year and abs(int(candidate_year) - int(suggestion.year)) <= 1:
+                        lookup = candidate
+                        break
+
+            # Fall back to first result if no year match found
+            if not lookup:
+                lookup = lookup_candidates[0]
+
             lookup_year = lookup.get("year")
             if lookup_year in {None, 0, "", "0000"}:
                 skipped.append(suggestion.title)
@@ -94,6 +89,11 @@ class SyncService:
 
             if tmdb_int is not None and not force and tmdb_int in existing_tmdb_ids:
                 skipped.append(suggestion.title)
+                continue
+
+            # In dry-run mode, just track as queued without actually adding
+            if dry_run:
+                queued.append(suggestion.title)
                 continue
 
             payload = build_add_movie_payload(
@@ -122,7 +122,7 @@ class SyncService:
             if tmdb_int is not None:
                 existing_tmdb_ids.add(tmdb_int)
 
-        return SyncSummary(dry_run=False, queued=queued, skipped=skipped, errors=errors)
+        return SyncSummary(dry_run=dry_run, queued=queued, skipped=skipped, errors=errors)
 
 
 __all__ = ["SyncService"]
