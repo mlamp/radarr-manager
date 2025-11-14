@@ -6,7 +6,9 @@ from radarr_manager.providers.openai import OpenAIProvider
 from radarr_manager.providers.static import StaticListProvider
 
 
-def build_provider(settings: Settings, override: str | None = None) -> MovieDiscoveryProvider:
+def build_provider(
+    settings: Settings, override: str | None = None, debug: bool = False
+) -> MovieDiscoveryProvider:
     """Construct a discovery provider based on configuration or CLI overrides."""
 
     provider_name = (override or settings.llm_provider or "static").lower()
@@ -20,6 +22,7 @@ def build_provider(settings: Settings, override: str | None = None) -> MovieDisc
             model=settings.openai_model,
             region=settings.region,
             cache_ttl_hours=settings.cache_ttl_hours,
+            debug=debug,
         )
 
     raise ProviderError(

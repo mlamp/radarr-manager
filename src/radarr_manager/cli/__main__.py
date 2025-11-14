@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, Optional
 
 import typer
@@ -38,13 +39,17 @@ def discover(
         None,
         help="Override the configured discovery provider (e.g. openai, gemini).",
     ),
+    debug: bool = typer.Option(False, help="Enable debug logging to see detailed discovery process."),
 ) -> None:
     """Discover blockbuster releases using the configured content providers."""
+    if debug:
+        _setup_logging(logging.INFO)
+
     load_result = _safe_load_settings()
     if load_result is None:
         raise typer.Exit(code=1)
 
-    provider_instance = _safe_build_provider(load_result.settings, provider)
+    provider_instance = _safe_build_provider(load_result.settings, provider, debug=debug)
     if provider_instance is None:
         raise typer.Exit(code=1)
 
@@ -62,8 +67,12 @@ def sync(
         False,
         help="Add movies even if a potential duplicate is detected.",
     ),
+    debug: bool = typer.Option(False, help="Enable debug logging to see detailed discovery process."),
 ) -> None:
     """Synchronize discovered movies with Radarr."""
+    if debug:
+        _setup_logging(logging.INFO)
+
     load_result = _safe_load_settings()
     if load_result is None:
         raise typer.Exit(code=1)
@@ -75,7 +84,7 @@ def sync(
         typer.secho(str(exc), fg=typer.colors.RED)
         raise typer.Exit(code=1) from exc
 
-    provider_instance = _safe_build_provider(settings, None)
+    provider_instance = _safe_build_provider(settings, None, debug=debug)
     if provider_instance is None:
         raise typer.Exit(code=1)
 
@@ -145,12 +154,21 @@ def _safe_load_settings(load_even_if_missing: bool = False) -> Optional[Settings
         return None
 
 
-def _safe_build_provider(settings: Settings, override: str | None):
+def _safe_build_provider(settings: Settings, override: str | None, debug: bool = False):
     try:
-        return build_provider(settings, override=override)
+        return build_provider(settings, override=override, debug=debug)
     except Exception as exc:  # pragma: no cover - surfaced through CLI error handling
         typer.secho(str(exc), fg=typer.colors.RED)
         return None
+
+
+def _setup_logging(level: int = logging.INFO) -> None:
+    """Configure logging for debug mode."""
+    logging.basicConfig(
+        format="%(message)s",
+        level=level,
+        force=True,
+    )
 
 
 def _render_discover_results(
