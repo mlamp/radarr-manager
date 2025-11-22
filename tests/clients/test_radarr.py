@@ -21,11 +21,7 @@ from tests.fixtures.radarr_responses import (
 @pytest.fixture
 def client():
     """Create a RadarrClient instance for testing."""
-    return RadarrClient(
-        base_url="http://localhost:7878",
-        api_key="test-api-key",
-        timeout=10.0
-    )
+    return RadarrClient(base_url="http://localhost:7878", api_key="test-api-key", timeout=10.0)
 
 
 class TestRadarrClient:
@@ -34,11 +30,7 @@ class TestRadarrClient:
     @pytest.mark.asyncio
     async def test_client_initialization(self):
         """Test client is properly initialized with headers."""
-        client = RadarrClient(
-            base_url="http://localhost:7878",
-            api_key="test-key",
-            timeout=15.0
-        )
+        client = RadarrClient(base_url="http://localhost:7878", api_key="test-key", timeout=15.0)
 
         assert client._client.base_url == "http://localhost:7878"
         assert client._client.headers["X-Api-Key"] == "test-key"
@@ -51,10 +43,7 @@ class TestRadarrClient:
     @pytest.mark.asyncio
     async def test_client_strips_trailing_slash_from_base_url(self):
         """Test that trailing slash is removed from base URL."""
-        client = RadarrClient(
-            base_url="http://localhost:7878/",
-            api_key="test-key"
-        )
+        client = RadarrClient(base_url="http://localhost:7878/", api_key="test-key")
 
         assert client._client.base_url == "http://localhost:7878"
         await client.close()

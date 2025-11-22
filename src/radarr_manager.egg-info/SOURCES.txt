@@ -13,6 +13,9 @@ src/radarr_manager/clients/__init__.py
 src/radarr_manager/clients/radarr.py
 src/radarr_manager/config/__init__.py
 src/radarr_manager/config/settings.py
+src/radarr_manager/mcp/__init__.py
+src/radarr_manager/mcp/schemas.py
+src/radarr_manager/mcp/server.py
 src/radarr_manager/models/__init__.py
 src/radarr_manager/models/movie.py
 src/radarr_manager/providers/__init__.py
@@ -21,6 +24,7 @@ src/radarr_manager/providers/factory.py
 src/radarr_manager/providers/openai.py
 src/radarr_manager/providers/static.py
 src/radarr_manager/services/__init__.py
+src/radarr_manager/services/analysis.py
 src/radarr_manager/services/discovery.py
 src/radarr_manager/services/sync.py
 tests/test_cli_smoke.py

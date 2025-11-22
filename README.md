@@ -5,6 +5,12 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 ## Features
 
 - 🎬 **Intelligent Movie Discovery**: Uses LLM providers (OpenAI) with web search for real-time box office trends
+- 🚀 **MCP Service Mode (v1.8.0)**: Run as MCP server for AI agent integration
+  - Long-running service with structured tool API
+  - Native integration for Telegram bots, Discord bots, web apps
+  - 5 MCP tools: search_movie, add_movie, analyze_quality, discover_movies, sync_movies
+  - Eliminates CLI overhead, maintains connection pooling
+  - Perfect for conversational AI applications
 - ➕ **Manual Movie Addition with Quality Gate (v1.7.0)**: Add specific movies by title with smart filtering
   - Intelligent quality gating blocks bad movies (configurable threshold)
   - Override support for guilty pleasures (`--force` flag)
@@ -415,6 +421,185 @@ radarr-manager sync --limit 10 --no-dry-run --deep-analysis
 **Force add duplicates**:
 ```bash
 radarr-manager sync --force --limit 2
+```
+
+## MCP Service Mode
+
+Run radarr-manager as a long-running MCP (Model Context Protocol) server for AI agent integration. Perfect for Telegram bots, Discord bots, or any LLM application that needs to interact with Radarr.
+
+### Why MCP Mode?
+
+**CLI Approach** (subprocess overhead):
+```python
+# Telegram bot calling CLI
+result = subprocess.run(['radarr-manager', 'add', '--title', title])
+# New process per request, parse JSON output
+```
+
+**MCP Approach** (clean, fast):
+```python
+# Telegram bot using MCP client
+result = await mcp_client.call_tool("add_movie", {"title": title, "year": 2026})
+# Structured response, persistent service
+```
+
+### Available MCP Tools
+
+| Tool | Description | Use Case |
+|------|-------------|----------|
+| `search_movie` | Check if movie exists in Radarr | "Do we have this movie?" |
+| `add_movie` | Add with quality gating | "Add Dune: Part Three" |
+| `analyze_quality` | Get ratings without adding | "Is this movie good?" |
+| `discover_movies` | Find blockbuster suggestions | "What's trending?" |
+| `sync_movies` | Discover and sync in one call | "Add top 10 movies" |
+
+### Start MCP Server
+
+```bash
+# Start MCP server (stdio transport for local clients)
+radarr-manager serve
+
+# With debug logging
+radarr-manager serve --debug
+```
+
+### Docker MCP Service
+
+```bash
+# Run as long-running service
+docker run -d \
+  --name radarr-manager-mcp \
+  --env-file .env \
+  --network host \
+  -p 8080:8080 \
+  mlamp/radarr-manager:1.8.0 \
+  serve --host 0.0.0.0
+
+# Check logs
+docker logs -f radarr-manager-mcp
+```
+
+### Python Client Example
+
+```python
+from mcp import Client
+
+# Connect to MCP server
+async with Client("stdio://radarr-manager serve") as mcp:
+    # Check if movie exists
+    result = await mcp.call_tool("search_movie", {
+        "title": "Interstellar",
+        "year": 2014
+    })
+    print(result["exists"])  # True/False
+
+    # Add movie with quality gate
+    result = await mcp.call_tool("add_movie", {
+        "title": "Dune: Part Three",
+        "year": 2026,
+        "dry_run": False,
+        "quality_threshold": 6.0
+    })
+
+    if result["error"] == "quality_too_low":
+        # Ask user if they want to force add
+        print(f"⚠️ Low quality: {result['quality_analysis']['overall_score']}/10")
+        print(result["override_instructions"])
+
+        # Force add if user confirms
+        result = await mcp.call_tool("add_movie", {
+            "title": "Dune: Part Three",
+            "year": 2026,
+            "force": True
+        })
+```
+
+### Telegram Bot Integration
+
+```python
+import asyncio
+from telegram import Update
+from telegram.ext import Application, MessageHandler
+from mcp import Client
+
+mcp_client = Client("stdio://radarr-manager serve")
+
+async def handle_voice(update: Update, context):
+    # 1. Transcribe voice message
+    audio = await update.message.voice.get_file()
+    transcript = await openai.audio.transcribe("whisper-1", audio)
+
+    # 2. Parse movie request
+    parsed = await parse_movie_request(transcript)
+
+    # 3. Check if exists via MCP
+    result = await mcp_client.call_tool("search_movie", {
+        "title": parsed["title"],
+        "year": parsed["year"]
+    })
+
+    if result["exists"]:
+        await update.message.reply_text(f"✅ We already have {parsed['title']}!")
+        return
+
+    # 4. Add with quality gate
+    result = await mcp_client.call_tool("add_movie", parsed)
+
+    if result["success"]:
+        await update.message.reply_text(f"✅ Added {parsed['title']}!")
+    elif result["error"] == "quality_too_low":
+        qa = result["quality_analysis"]
+        await update.message.reply_text(
+            f"⚠️ {parsed['title']} has poor ratings "
+            f"(score: {qa['overall_score']}/10)\n"
+            f"Reply 'yes' to add anyway."
+        )
+
+# Register handler
+app = Application.builder().token(TOKEN).build()
+app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+app.run_polling()
+```
+
+### MCP Response Examples
+
+**Successful Add:**
+```json
+{
+  "success": true,
+  "message": "Added: Dune: Part Three (2026)",
+  "movie": {"title": "Dune: Part Three", "year": 2026, "tmdb_id": 12345},
+  "quality_analysis": {
+    "overall_score": 8.5,
+    "threshold": 5.0,
+    "passed": true,
+    "recommendation": "HIGHLY RECOMMENDED",
+    "ratings": {
+      "rotten_tomatoes": {"critics_score": 85, "audience_score": 90},
+      "imdb": {"score": 8.3, "votes": 250000},
+      "metacritic": {"score": 78}
+    },
+    "red_flags": []
+  }
+}
+```
+
+**Quality Gate Rejection:**
+```json
+{
+  "success": false,
+  "error": "quality_too_low",
+  "message": "Movie has poor ratings (score: 3.2/10, threshold: 5.0)",
+  "quality_analysis": {
+    "overall_score": 3.2,
+    "threshold": 5.0,
+    "passed": false,
+    "recommendation": "NOT RECOMMENDED",
+    "red_flags": ["RT critics score very poor (15%)", "Large RT score gap (critics: 15% vs audience: 45%)"]
+  },
+  "can_override": true,
+  "override_instructions": "To add anyway, call add_movie again with force=true"
+}
 ```
 
 ## Docker Usage

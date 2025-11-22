@@ -248,7 +248,7 @@ class TestOpenAIProviderDiscover:
         mock_response = MockOpenAIResponse(output_text=json.dumps(EMPTY_SUGGESTIONS_RESPONSE))
         mock_openai_client.responses.create.return_value = mock_response
 
-        with patch('radarr_manager.providers.openai.datetime') as mock_datetime:
+        with patch("radarr_manager.providers.openai.datetime") as mock_datetime:
             mock_datetime.now.return_value.strftime.return_value = "2024-09-19 16:30 UTC"
 
             await openai_provider.discover(limit=1)
@@ -330,7 +330,7 @@ class TestOpenAIBuildPrompt:
 
     def test_build_prompt_includes_all_parameters(self, openai_provider):
         """Test that build_prompt includes all required parameters."""
-        with patch('radarr_manager.providers.openai.datetime') as mock_datetime:
+        with patch("radarr_manager.providers.openai.datetime") as mock_datetime:
             mock_datetime.now.return_value.strftime.return_value = "2024-09-19 16:30 UTC"
 
             prompt = openai_provider._build_prompt(limit=5, region="EU")
@@ -343,7 +343,7 @@ class TestOpenAIBuildPrompt:
 
     def test_build_prompt_different_parameters(self, openai_provider):
         """Test prompt building with different parameters."""
-        with patch('radarr_manager.providers.openai.datetime') as mock_datetime:
+        with patch("radarr_manager.providers.openai.datetime") as mock_datetime:
             mock_datetime.now.return_value.strftime.return_value = "2024-12-25 12:00 UTC"
 
             prompt = openai_provider._build_prompt(limit=10, region="CA")

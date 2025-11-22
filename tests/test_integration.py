@@ -358,8 +358,7 @@ class TestPerformanceIntegration:
             if len(movies) > 100:
                 # Test that we can process the list efficiently
                 tmdb_ids = {
-                    movie.get("tmdbId") for movie in movies
-                    if movie.get("tmdbId") is not None
+                    movie.get("tmdbId") for movie in movies if movie.get("tmdbId") is not None
                 }
 
                 # Should be able to extract TMDB IDs quickly

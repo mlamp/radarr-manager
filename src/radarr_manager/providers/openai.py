@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -21,8 +21,8 @@ SYSTEM_PROMPT = (
     "- rt_critics_score (Rotten Tomatoes critics %, 0-100), rt_audience_score (RT audience %, 0-100) "
     "- metacritic_score (Metacritic score, 0-100, null if unavailable) "
     "Use web_search to find current ratings from IMDb, Rotten Tomatoes, and Metacritic. "
-    "Example format: {\"title\": \"Movie Title\", \"metadata\": {\"tmdb_id\": 12345, \"imdb_id\": \"tt1234567\", \"imdb_rating\": 7.3, "
-    "\"imdb_votes\": 45000, \"rt_critics_score\": 85, \"rt_audience_score\": 92, \"metacritic_score\": 78}, ...} "
+    'Example format: {"title": "Movie Title", "metadata": {"tmdb_id": 12345, "imdb_id": "tt1234567", "imdb_rating": 7.3, '
+    '"imdb_votes": 45000, "rt_critics_score": 85, "rt_audience_score": 92, "metacritic_score": 78}, ...} '
     "Focus on major film releases from the past three months or the next four months that have strong commercial momentum. "
     "Include: blockbusters, franchises (Marvel, DC, Disney, Universal, Warner Bros), prestige films (Lionsgate, A24, Sony Pictures, "
     "Neon, Searchlight, Focus Features, Aura Entertainment, IFC, Bleecker Street), AND well-reviewed mid-budget theatrical releases "
@@ -45,6 +45,7 @@ SYSTEM_PROMPT = (
     "Every suggestion must have genuine mainstream appeal and critical/audience approval (or strong pre-release anticipation). "
     "Return raw JSON only—no markdown, explanations, or keys outside the schema."
 )
+
 
 class OpenAIProvider(MovieDiscoveryProvider):
     """Discovery provider that queries OpenAI with web search enabled."""
@@ -116,7 +117,9 @@ class OpenAIProvider(MovieDiscoveryProvider):
             except Exception as exc:  # pragma: no cover - validation errors bubble to user
                 validation_errors.append(f"{item.get('title', 'Unknown')}: {exc}")
                 if self._debug:
-                    logger.warning(f"[DEBUG] Validation failed for: {item.get('title', 'Unknown')} - {exc}")
+                    logger.warning(
+                        f"[DEBUG] Validation failed for: {item.get('title', 'Unknown')} - {exc}"
+                    )
 
         if validation_errors and not self._debug:
             raise ProviderError(f"Invalid suggestion payload: {validation_errors[0]}")
@@ -124,7 +127,9 @@ class OpenAIProvider(MovieDiscoveryProvider):
         truncated = suggestions[:limit]
 
         if self._debug:
-            logger.info(f"[DEBUG] Validated {len(suggestions)} suggestions, returning {len(truncated)}")
+            logger.info(
+                f"[DEBUG] Validated {len(suggestions)} suggestions, returning {len(truncated)}"
+            )
             for idx, s in enumerate(truncated, 1):
                 imdb_rating = "N/A"
                 if s.metadata and "imdb_rating" in s.metadata:
@@ -143,7 +148,7 @@ class OpenAIProvider(MovieDiscoveryProvider):
         return truncated
 
     def _build_prompt(self, *, limit: int, region: str) -> str:
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         return (
             "Use web_search for upcoming/recent wide theatrical movies. Search: IMDb, Rotten Tomatoes "
             "(https://www.rottentomatoes.com/browse/movies_in_theaters for currently playing), Metacritic, and TMDB. "

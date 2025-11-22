@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: radarr-manager
-Version: 0.1.0
+Version: 1.8.0
 Summary: CLI helpers for discovering and managing blockbuster movie lists in Radarr.
 Author: Margus
 Requires-Python: >=3.12
@@ -11,6 +11,9 @@ Requires-Dist: pydantic>=2.7
 Requires-Dist: tenacity>=9.0
 Requires-Dist: python-dotenv>=1.0
 Requires-Dist: openai>=1.44
+Requires-Dist: mcp>=1.0
+Requires-Dist: uvicorn>=0.30
+Requires-Dist: sse-starlette>=2.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.3; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
@@ -27,10 +30,27 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 ## Features
 
 - 🎬 **Intelligent Movie Discovery**: Uses LLM providers (OpenAI) with web search for real-time box office trends
+- 🚀 **MCP Service Mode (v1.8.0)**: Run as MCP server for AI agent integration
+  - Long-running service with structured tool API
+  - Native integration for Telegram bots, Discord bots, web apps
+  - 5 MCP tools: search_movie, add_movie, analyze_quality, discover_movies, sync_movies
+  - Eliminates CLI overhead, maintains connection pooling
+  - Perfect for conversational AI applications
+- ➕ **Manual Movie Addition with Quality Gate (v1.7.0)**: Add specific movies by title with smart filtering
+  - Intelligent quality gating blocks bad movies (configurable threshold)
+  - Override support for guilty pleasures (`--force` flag)
+  - Multi-source ratings analysis (RT, IMDb, Metacritic)
+  - Detailed quality scores, red flags, and recommendations in JSON
+- 🔍 **Deep Analysis Mode (v1.6.0)**: Multi-source ratings validation
+  - Quality scoring with configurable thresholds (default: 5.0/10)
+  - Red flag detection (poor ratings, low votes, score gaps)
+  - Automated filtering of low-quality movies
 - 🔄 **Safe Sync Operations**: Dry-run mode for validation before making changes
 - ⚙️ **Flexible Configuration**: Environment variables, .env files, or TOML configuration
 - 🏷️ **Smart Tagging**: Automatic tagging and quality profile assignment
+- 🎯 **Oscar Winner Priority**: Prioritizes movies featuring Academy Award winners
 - 🔍 **Duplicate Detection**: Prevents adding movies already in your Radarr library
+- 🤖 **Bot-Friendly**: JSON output and exit codes for programmatic integration (Starr Butler, etc.)
 - 🧪 **Comprehensive Testing**: 119+ test cases with integration test support
 
 ## Requirements
@@ -40,6 +60,25 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 - OpenAI API key (for movie discovery)
 
 ## Installation
+
+### Option 1: Docker (Recommended)
+
+```bash
+# Pull the latest image
+docker pull mlamp/radarr-manager:latest
+
+# Run with environment variables
+docker run --rm \
+  -e RADARR_BASE_URL="http://your-radarr:7878" \
+  -e RADARR_API_KEY="your-api-key" \
+  -e OPENAI_API_KEY="your-openai-key" \
+  mlamp/radarr-manager:latest discover --limit 5
+
+# Or use a .env file
+docker run --rm --env-file .env mlamp/radarr-manager:latest sync --dry-run
+```
+
+### Option 2: Python Installation
 
 ```bash
 # Create virtual environment (Python 3.12+ required)
@@ -162,10 +201,211 @@ Synchronize discovered movies with Radarr:
 radarr-manager sync [OPTIONS]
 
 Options:
-  --limit INTEGER     Number of suggestions to evaluate (default: 5)
+  --limit INTEGER              Number of suggestions to evaluate (default: 5)
   --dry-run / --no-dry-run    Preview without changes (default: --dry-run)
   --force / --no-force        Add even if duplicates detected (default: --no-force)
-  --help             Show this message and exit
+  --deep-analysis             Enable per-movie quality analysis (v1.6.0+)
+  --debug                     Show detailed analysis output
+  --help                      Show this message and exit
+```
+
+**New in v1.6.0: Deep Analysis Mode**
+
+The `--deep-analysis` flag enables comprehensive per-movie evaluation:
+- Fetches ratings from Rotten Tomatoes (critics + audience), IMDb, and Metacritic
+- Calculates quality scores (0-10) with weighted ratings
+- Detects red flags (poor ratings, low vote counts, score gaps)
+- Filters out low-quality movies automatically (score < 6.0 or >2 red flags)
+
+```bash
+# Enable deep analysis for quality filtering
+radarr-manager sync --limit 10 --dry-run --deep-analysis --debug
+```
+
+#### `add`
+Manually add a specific movie to Radarr with intelligent quality gating:
+
+```bash
+radarr-manager add [OPTIONS]
+
+Options:
+  --title TEXT                    Movie title to search for
+  --year INTEGER                  Release year (for better accuracy)
+  --tmdb-id INTEGER              TMDB ID (e.g., 123456)
+  --imdb-id TEXT                 IMDB ID (e.g., tt1234567)
+  --dry-run / --no-dry-run       Preview without changes (default: --dry-run)
+  --force / --no-force           Bypass quality gate and add regardless (default: --no-force)
+  --deep-analysis / --no-deep    Enable quality analysis (default: --deep-analysis)
+  --quality-threshold FLOAT      Minimum score (0-10) to auto-add (default: 5.0)
+  --json / --no-json             Output as JSON (default: --json)
+  --debug                        Enable debug logging
+  --help                         Show this message and exit
+```
+
+**New in v1.7.0: Intelligent Quality Gating**
+
+The `add` command now includes smart quality filtering that protects your library from bad movies while allowing voice override for guilty pleasures:
+
+- **Quality Gate**: Movies below `--quality-threshold` (default 5.0/10) are blocked
+- **Multi-Source Ratings**: RT critics/audience, IMDb, Metacritic analysis
+- **Override Support**: Use `--force` to bypass quality gate
+- **Detailed Feedback**: JSON includes quality scores, red flags, and override instructions
+
+**Usage Examples:**
+
+```bash
+# Basic add with quality gate (deep-analysis enabled by default)
+radarr-manager add --title "Dune: Part Three" --year 2026 --no-dry-run
+
+# Skip quality checks for fast add
+radarr-manager add --title "The Batman Part II" --year 2026 --no-deep-analysis --no-dry-run
+
+# Custom quality threshold (stricter filtering)
+radarr-manager add --title "Borderline Movie" --year 2024 --quality-threshold 7.0
+
+# Force add a low-quality movie (override quality gate)
+radarr-manager add --title "Movie 43" --year 2013 --force --no-dry-run
+
+# Add by TMDB ID (most accurate, skips quality analysis)
+radarr-manager add --tmdb-id 123456 --no-deep-analysis --no-dry-run
+
+# Human-readable output
+radarr-manager add --title "Interstellar" --year 2014 --no-json
+```
+
+**JSON Output Format:**
+
+Success with quality analysis:
+```json
+{
+  "success": true,
+  "message": "Successfully added: Dune: Part Three (2026)",
+  "movie": {
+    "title": "Dune: Part Three",
+    "year": 2026,
+    "tmdb_id": 1170608,
+    "imdb_id": "tt15239678"
+  },
+  "quality_analysis": {
+    "overall_score": 8.5,
+    "threshold": 5.0,
+    "passed": true,
+    "recommendation": "RECOMMENDED - Strong quality, worth adding",
+    "ratings": {
+      "rotten_tomatoes": {
+        "critics_score": 92,
+        "audience_score": 89
+      },
+      "imdb": {
+        "score": 8.7,
+        "votes": 125000
+      },
+      "metacritic": {
+        "score": 85
+      }
+    },
+    "red_flags": []
+  }
+}
+```
+
+Quality gate rejection:
+```json
+{
+  "success": false,
+  "error": "quality_too_low",
+  "message": "Movie has poor ratings (score: 2.5/10, threshold: 5.0)",
+  "movie": {
+    "title": "Movie 43",
+    "year": 2013,
+    "tmdb_id": 63535
+  },
+  "quality_analysis": {
+    "overall_score": 2.5,
+    "threshold": 5.0,
+    "passed": false,
+    "recommendation": "NOT RECOMMENDED - Quality concerns, likely skip",
+    "ratings": {
+      "rotten_tomatoes": {
+        "critics_score": 4,
+        "audience_score": 18
+      },
+      "imdb": {
+        "score": 4.3,
+        "votes": 95420
+      },
+      "metacritic": {
+        "score": 18
+      }
+    },
+    "red_flags": [
+      "Extremely low critic consensus (Rotten Tomatoes: 4%)",
+      "IMDb rating below 5.0 indicates poor quality",
+      "Metacritic in 'overwhelming dislike' range (< 40)"
+    ]
+  },
+  "can_override": true,
+  "override_instructions": "To add this movie anyway, use: radarr-manager add --title \"Movie 43\" --year 2013 --force"
+}
+```
+
+Already exists:
+```json
+{
+  "success": false,
+  "error": "already_exists",
+  "message": "Movie already in Radarr library: Inception (2010)",
+  "movie": {
+    "title": "Inception",
+    "year": 2010,
+    "tmdb_id": 27205
+  },
+  "override_instructions": "This check cannot be bypassed with --force"
+}
+```
+
+Force override (with warning):
+```json
+{
+  "success": true,
+  "message": "Successfully added: Movie 43 (2013)",
+  "warning": "This movie has poor ratings but was added due to --force flag",
+  "movie": {
+    "title": "Movie 43",
+    "year": 2013,
+    "tmdb_id": 63535,
+    "imdb_id": "tt1667003"
+  },
+  "quality_analysis": {
+    "overall_score": 2.5,
+    "threshold": 5.0,
+    "passed": false,
+    "recommendation": "NOT RECOMMENDED - Quality concerns, likely skip",
+    "ratings": {...},
+    "red_flags": [...]
+  }
+}
+```
+
+**Exit Codes:**
+- `0`: Success
+- `1`: Movie not found
+- `2`: Already exists (duplicate)
+- `3`: Quality too low (with --deep-analysis)
+- `4`: Radarr API error
+- `5`: Other errors
+
+**Integration with Starr Butler:**
+
+The `add` command is designed for programmatic use by voice bots and automation tools. The JSON output and exit codes make it easy to integrate:
+
+```bash
+# Example: Telegram bot calling radarr-manager via Docker
+docker run --rm \
+  --env-file /mnt/user/appdata/radarr-manager/.env \
+  --network host \
+  mlamp/radarr-manager:latest \
+  add --title "Movie Title" --year 2026 --no-dry-run
 ```
 
 #### `config`
@@ -187,15 +427,233 @@ radarr-manager discover --limit 10
 radarr-manager sync --dry-run --limit 5
 ```
 
+**Deep analysis with quality filtering (v1.6.0+)**:
+```bash
+# Analyze movies with multi-source ratings validation
+radarr-manager sync --limit 10 --dry-run --deep-analysis --debug
+```
+
 **Production sync** (adds movies to Radarr):
 ```bash
 radarr-manager sync --limit 3
+```
+
+**Production sync with deep analysis** (recommended):
+```bash
+radarr-manager sync --limit 10 --no-dry-run --deep-analysis
 ```
 
 **Force add duplicates**:
 ```bash
 radarr-manager sync --force --limit 2
 ```
+
+## MCP Service Mode
+
+Run radarr-manager as a long-running MCP (Model Context Protocol) server for AI agent integration. Perfect for Telegram bots, Discord bots, or any LLM application that needs to interact with Radarr.
+
+### Why MCP Mode?
+
+**CLI Approach** (subprocess overhead):
+```python
+# Telegram bot calling CLI
+result = subprocess.run(['radarr-manager', 'add', '--title', title])
+# New process per request, parse JSON output
+```
+
+**MCP Approach** (clean, fast):
+```python
+# Telegram bot using MCP client
+result = await mcp_client.call_tool("add_movie", {"title": title, "year": 2026})
+# Structured response, persistent service
+```
+
+### Available MCP Tools
+
+| Tool | Description | Use Case |
+|------|-------------|----------|
+| `search_movie` | Check if movie exists in Radarr | "Do we have this movie?" |
+| `add_movie` | Add with quality gating | "Add Dune: Part Three" |
+| `analyze_quality` | Get ratings without adding | "Is this movie good?" |
+| `discover_movies` | Find blockbuster suggestions | "What's trending?" |
+| `sync_movies` | Discover and sync in one call | "Add top 10 movies" |
+
+### Start MCP Server
+
+```bash
+# Start MCP server (stdio transport for local clients)
+radarr-manager serve
+
+# With debug logging
+radarr-manager serve --debug
+```
+
+### Docker MCP Service
+
+```bash
+# Run as long-running service
+docker run -d \
+  --name radarr-manager-mcp \
+  --env-file .env \
+  --network host \
+  -p 8080:8080 \
+  mlamp/radarr-manager:1.8.0 \
+  serve --host 0.0.0.0
+
+# Check logs
+docker logs -f radarr-manager-mcp
+```
+
+### Python Client Example
+
+```python
+from mcp import Client
+
+# Connect to MCP server
+async with Client("stdio://radarr-manager serve") as mcp:
+    # Check if movie exists
+    result = await mcp.call_tool("search_movie", {
+        "title": "Interstellar",
+        "year": 2014
+    })
+    print(result["exists"])  # True/False
+
+    # Add movie with quality gate
+    result = await mcp.call_tool("add_movie", {
+        "title": "Dune: Part Three",
+        "year": 2026,
+        "dry_run": False,
+        "quality_threshold": 6.0
+    })
+
+    if result["error"] == "quality_too_low":
+        # Ask user if they want to force add
+        print(f"⚠️ Low quality: {result['quality_analysis']['overall_score']}/10")
+        print(result["override_instructions"])
+
+        # Force add if user confirms
+        result = await mcp.call_tool("add_movie", {
+            "title": "Dune: Part Three",
+            "year": 2026,
+            "force": True
+        })
+```
+
+### Telegram Bot Integration
+
+```python
+import asyncio
+from telegram import Update
+from telegram.ext import Application, MessageHandler
+from mcp import Client
+
+mcp_client = Client("stdio://radarr-manager serve")
+
+async def handle_voice(update: Update, context):
+    # 1. Transcribe voice message
+    audio = await update.message.voice.get_file()
+    transcript = await openai.audio.transcribe("whisper-1", audio)
+
+    # 2. Parse movie request
+    parsed = await parse_movie_request(transcript)
+
+    # 3. Check if exists via MCP
+    result = await mcp_client.call_tool("search_movie", {
+        "title": parsed["title"],
+        "year": parsed["year"]
+    })
+
+    if result["exists"]:
+        await update.message.reply_text(f"✅ We already have {parsed['title']}!")
+        return
+
+    # 4. Add with quality gate
+    result = await mcp_client.call_tool("add_movie", parsed)
+
+    if result["success"]:
+        await update.message.reply_text(f"✅ Added {parsed['title']}!")
+    elif result["error"] == "quality_too_low":
+        qa = result["quality_analysis"]
+        await update.message.reply_text(
+            f"⚠️ {parsed['title']} has poor ratings "
+            f"(score: {qa['overall_score']}/10)\n"
+            f"Reply 'yes' to add anyway."
+        )
+
+# Register handler
+app = Application.builder().token(TOKEN).build()
+app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+app.run_polling()
+```
+
+### MCP Response Examples
+
+**Successful Add:**
+```json
+{
+  "success": true,
+  "message": "Added: Dune: Part Three (2026)",
+  "movie": {"title": "Dune: Part Three", "year": 2026, "tmdb_id": 12345},
+  "quality_analysis": {
+    "overall_score": 8.5,
+    "threshold": 5.0,
+    "passed": true,
+    "recommendation": "HIGHLY RECOMMENDED",
+    "ratings": {
+      "rotten_tomatoes": {"critics_score": 85, "audience_score": 90},
+      "imdb": {"score": 8.3, "votes": 250000},
+      "metacritic": {"score": 78}
+    },
+    "red_flags": []
+  }
+}
+```
+
+**Quality Gate Rejection:**
+```json
+{
+  "success": false,
+  "error": "quality_too_low",
+  "message": "Movie has poor ratings (score: 3.2/10, threshold: 5.0)",
+  "quality_analysis": {
+    "overall_score": 3.2,
+    "threshold": 5.0,
+    "passed": false,
+    "recommendation": "NOT RECOMMENDED",
+    "red_flags": ["RT critics score very poor (15%)", "Large RT score gap (critics: 15% vs audience: 45%)"]
+  },
+  "can_override": true,
+  "override_instructions": "To add anyway, call add_movie again with force=true"
+}
+```
+
+## Docker Usage
+
+The Docker image is available at `mlamp/radarr-manager` on Docker Hub with multi-architecture support (amd64, arm64).
+
+For comprehensive Docker documentation including advanced usage, networking, and scheduling, see **[DOCKER.md](DOCKER.md)**.
+
+### Quick Start with Docker
+
+**Discover movies:**
+```bash
+docker run --rm \
+  -e RADARR_BASE_URL="http://192.168.1.100:7878" \
+  -e RADARR_API_KEY="your-radarr-api-key" \
+  -e OPENAI_API_KEY="your-openai-api-key" \
+  mlamp/radarr-manager:latest discover --limit 10
+```
+
+**Sync with deep analysis (recommended):**
+```bash
+docker run --rm \
+  --env-file /path/to/.env \
+  --network host \
+  mlamp/radarr-manager:latest \
+  sync --limit 10 --no-dry-run --deep-analysis --debug
+```
+
+See **[DOCKER.md](DOCKER.md)** for detailed examples, networking options, and docker-compose configurations.
 
 ## Development Workflow
 

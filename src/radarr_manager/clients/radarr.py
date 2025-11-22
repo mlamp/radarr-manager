@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from contextlib import asynccontextmanager
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 import httpx
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -68,7 +69,7 @@ class RadarrClient:
         response.raise_for_status()
         return response.json()
 
-    async def __aenter__(self) -> "RadarrClient":
+    async def __aenter__(self) -> RadarrClient:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:  # type: ignore[override]

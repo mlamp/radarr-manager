@@ -11,10 +11,7 @@ VALID_JSON_RESPONSE = {
             "franchise": "Dune",
             "confidence": 0.95,
             "sources": ["variety.com", "boxofficemojo.com"],
-            "metadata": {
-                "budget": "190M",
-                "genre": "Science Fiction"
-            }
+            "metadata": {"budget": "190M", "genre": "Science Fiction"},
         },
         {
             "title": "Deadpool & Wolverine",
@@ -23,17 +20,12 @@ VALID_JSON_RESPONSE = {
             "franchise": "Marvel",
             "confidence": 0.88,
             "sources": ["hollywoodreporter.com", "deadline.com"],
-            "metadata": {
-                "rating": "R",
-                "runtime": "127 min"
-            }
-        }
+            "metadata": {"rating": "R", "runtime": "127 min"},
+        },
     ]
 }
 
-EMPTY_SUGGESTIONS_RESPONSE = {
-    "suggestions": []
-}
+EMPTY_SUGGESTIONS_RESPONSE = {"suggestions": []}
 
 MALFORMED_JSON_RESPONSE = """
 {
@@ -52,7 +44,7 @@ RESPONSE_WITH_INVALID_DATES = {
             "release_date": "invalid-date",
             "overview": "Movie with invalid date",
             "confidence": 0.5,
-            "sources": ["test.com"]
+            "sources": ["test.com"],
         }
     ]
 }
@@ -65,6 +57,7 @@ RESPONSE_WITH_MISSING_FIELDS = {
         }
     ]
 }
+
 
 # Mock OpenAI Response structures
 class MockOpenAIContent:

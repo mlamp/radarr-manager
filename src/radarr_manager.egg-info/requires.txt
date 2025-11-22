@@ -4,6 +4,9 @@ pydantic>=2.7
 tenacity>=9.0
 python-dotenv>=1.0
 openai>=1.44
+mcp>=1.0
+uvicorn>=0.30
+sse-starlette>=2.0
 
 [dev]
 pytest>=8.3

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import httpx
 
@@ -28,7 +28,9 @@ class SyncService:
         self._minimum_availability = minimum_availability
         self._tags = list(tags or [])
 
-    async def sync(self, suggestions: list[MovieSuggestion], *, dry_run: bool, force: bool) -> SyncSummary:
+    async def sync(
+        self, suggestions: list[MovieSuggestion], *, dry_run: bool, force: bool
+    ) -> SyncSummary:
         if not dry_run and (self._quality_profile_id is None or self._root_folder_path is None):
             raise RuntimeError(
                 "quality_profile_id and root_folder_path must be configured for live sync operations",

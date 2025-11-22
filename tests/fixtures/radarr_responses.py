@@ -27,17 +27,14 @@ SYSTEM_STATUS_RESPONSE: dict[str, Any] = {
     "migrationVersion": 216,
     "urlBase": "",
     "runtimeVersion": "8.0.1",
-    "runtimeName": ".NET"
+    "runtimeName": ".NET",
 }
 
 MOVIE_LOOKUP_RESPONSE: list[dict[str, Any]] = [
     {
         "title": "Dune: Part Two",
         "originalTitle": "Dune: Part Two",
-        "originalLanguage": {
-            "id": 1,
-            "name": "English"
-        },
+        "originalLanguage": {"id": 1, "name": "English"},
         "alternateTitles": [],
         "secondaryYearSourceId": 0,
         "sortTitle": "dune part two",
@@ -51,7 +48,7 @@ MOVIE_LOOKUP_RESPONSE: list[dict[str, Any]] = [
             {
                 "coverType": "poster",
                 "url": "https://image.tmdb.org/t/p/original/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
-                "remoteUrl": "https://image.tmdb.org/t/p/original/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg"
+                "remoteUrl": "https://image.tmdb.org/t/p/original/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
             }
         ],
         "website": "",
@@ -75,26 +72,12 @@ MOVIE_LOOKUP_RESPONSE: list[dict[str, Any]] = [
         "tags": [],
         "added": "0001-01-01T00:00:00Z",
         "ratings": {
-            "imdb": {
-                "votes": 89567,
-                "value": 8.5,
-                "type": "user"
-            },
-            "tmdb": {
-                "votes": 1234,
-                "value": 8.2,
-                "type": "user"
-            }
+            "imdb": {"votes": 89567, "value": 8.5, "type": "user"},
+            "tmdb": {"votes": 1234, "value": 8.2, "type": "user"},
         },
-        "movieFile": {
-            "id": 0
-        },
-        "collection": {
-            "name": "Dune Collection",
-            "tmdbId": 726871,
-            "images": []
-        },
-        "popularity": 324.567
+        "movieFile": {"id": 0},
+        "collection": {"name": "Dune Collection", "tmdbId": 726871, "images": []},
+        "popularity": 324.567,
     }
 ]
 
@@ -104,10 +87,7 @@ MOVIE_LIST_RESPONSE: list[dict[str, Any]] = [
     {
         "title": "The Matrix",
         "originalTitle": "The Matrix",
-        "originalLanguage": {
-            "id": 1,
-            "name": "English"
-        },
+        "originalLanguage": {"id": 1, "name": "English"},
         "alternateTitles": [],
         "secondaryYearSourceId": 0,
         "sortTitle": "matrix",
@@ -136,24 +116,18 @@ MOVIE_LIST_RESPONSE: list[dict[str, Any]] = [
         "genres": ["Action", "Science Fiction"],
         "tags": [1],
         "added": "2024-01-01T00:00:00Z",
-        "ratings": {
-            "imdb": {
-                "votes": 1789456,
-                "value": 8.7,
-                "type": "user"
-            }
-        },
+        "ratings": {"imdb": {"votes": 1789456, "value": 8.7, "type": "user"}},
         "movieFile": {
             "id": 123,
             "movieId": 603,
             "relativePath": "The Matrix (1999) - Bluray-1080p.mkv",
             "path": "/data/movies/The Matrix (1999)/The Matrix (1999) - Bluray-1080p.mkv",
             "size": 2147483648,
-            "dateAdded": "2024-01-01T12:00:00Z"
+            "dateAdded": "2024-01-01T12:00:00Z",
         },
         "collection": None,
         "popularity": 45.123,
-        "id": 1
+        "id": 1,
     }
 ]
 
@@ -163,7 +137,7 @@ ROOT_FOLDERS_RESPONSE: list[dict[str, Any]] = [
         "path": "/data/movies",
         "accessible": True,
         "freeSpace": 1099511627776,
-        "unmappedFolders": []
+        "unmappedFolders": [],
     }
 ]
 
@@ -181,9 +155,9 @@ QUALITY_PROFILES_RESPONSE: list[dict[str, Any]] = [
                     "name": "SDTV",
                     "source": "television",
                     "resolution": 480,
-                    "modifier": "none"
+                    "modifier": "none",
                 },
-                "allowed": False
+                "allowed": False,
             },
             {
                 "id": 7,
@@ -192,28 +166,22 @@ QUALITY_PROFILES_RESPONSE: list[dict[str, Any]] = [
                     "name": "Bluray-1080p",
                     "source": "bluray",
                     "resolution": 1080,
-                    "modifier": "none"
+                    "modifier": "none",
                 },
-                "allowed": True
-            }
+                "allowed": True,
+            },
         ],
         "minFormatScore": 0,
         "cutoffFormatScore": 0,
         "formatItems": [],
-        "language": {
-            "id": 1,
-            "name": "English"
-        }
+        "language": {"id": 1, "name": "English"},
     }
 ]
 
 ADD_MOVIE_SUCCESS_RESPONSE: dict[str, Any] = {
     "title": "Dune: Part Two",
     "originalTitle": "Dune: Part Two",
-    "originalLanguage": {
-        "id": 1,
-        "name": "English"
-    },
+    "originalLanguage": {"id": 1, "name": "English"},
     "alternateTitles": [],
     "secondaryYearSourceId": 0,
     "sortTitle": "dune part two",
@@ -242,23 +210,11 @@ ADD_MOVIE_SUCCESS_RESPONSE: dict[str, Any] = {
     "genres": ["Action", "Adventure", "Science Fiction"],
     "tags": [1],
     "added": "2024-09-19T16:00:00Z",
-    "ratings": {
-        "imdb": {
-            "votes": 89567,
-            "value": 8.5,
-            "type": "user"
-        }
-    },
-    "movieFile": {
-        "id": 0
-    },
-    "collection": {
-        "name": "Dune Collection",
-        "tmdbId": 726871,
-        "images": []
-    },
+    "ratings": {"imdb": {"votes": 89567, "value": 8.5, "type": "user"}},
+    "movieFile": {"id": 0},
+    "collection": {"name": "Dune Collection", "tmdbId": 726871, "images": []},
     "popularity": 324.567,
-    "id": 123
+    "id": 123,
 }
 
 ADD_MOVIE_ERROR_RESPONSE: dict[str, Any] = {
@@ -266,5 +222,5 @@ ADD_MOVIE_ERROR_RESPONSE: dict[str, Any] = {
     "errorMessage": "This movie has already been added",
     "attemptedValue": 693134,
     "severity": "error",
-    "errorCode": "MovieExistsValidator"
+    "errorCode": "MovieExistsValidator",
 }

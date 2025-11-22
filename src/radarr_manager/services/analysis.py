@@ -70,9 +70,7 @@ class DeepAnalysisService:
         rating_details = self._build_rating_details(metadata)
 
         # Determine recommendation
-        recommendation = self._generate_recommendation(
-            movie, quality_score, red_flags, strengths
-        )
+        recommendation = self._generate_recommendation(movie, quality_score, red_flags, strengths)
 
         # Decision: should we add this movie?
         should_add = quality_score >= 6.0 and len(red_flags) <= 2
@@ -126,9 +124,7 @@ class DeepAnalysisService:
         if rt_critics is not None and rt_audience is not None:
             gap = abs(rt_critics - rt_audience)
             if gap > 30:
-                flags.append(
-                    f"Large RT critic/audience gap ({gap} points) - divisive reception"
-                )
+                flags.append(f"Large RT critic/audience gap ({gap} points) - divisive reception")
 
         # No ratings available at all
         if not any([imdb_rating, rt_critics, rt_audience, metacritic]):
@@ -136,9 +132,7 @@ class DeepAnalysisService:
 
         return flags
 
-    def _identify_strengths(
-        self, movie: MovieSuggestion, metadata: dict[str, Any]
-    ) -> list[str]:
+    def _identify_strengths(self, movie: MovieSuggestion, metadata: dict[str, Any]) -> list[str]:
         """Identify quality strengths that indicate a good movie."""
         strengths = []
 

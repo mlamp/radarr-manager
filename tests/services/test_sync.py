@@ -132,9 +132,13 @@ class TestSyncService:
         sync_service._client.lookup_movie.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_sync_missing_configuration_error(self, sync_service_no_config, sample_suggestions):
+    async def test_sync_missing_configuration_error(
+        self, sync_service_no_config, sample_suggestions
+    ):
         """Test sync fails when required configuration is missing."""
-        with pytest.raises(RuntimeError, match="quality_profile_id and root_folder_path must be configured"):
+        with pytest.raises(
+            RuntimeError, match="quality_profile_id and root_folder_path must be configured"
+        ):
             await sync_service_no_config.sync(sample_suggestions, dry_run=False, force=False)
 
     @pytest.mark.asyncio
@@ -312,9 +316,7 @@ class TestSyncService:
         error_response.text = "Bad Request"
 
         http_error = httpx.HTTPStatusError(
-            "400 Bad Request",
-            request=MagicMock(),
-            response=error_response
+            "400 Bad Request", request=MagicMock(), response=error_response
         )
         mock_radarr_client.ensure_movie.side_effect = http_error
 
@@ -344,9 +346,7 @@ class TestSyncService:
         error_response.text = "Internal Server Error"
 
         http_error = httpx.HTTPStatusError(
-            "500 Internal Server Error",
-            request=MagicMock(),
-            response=error_response
+            "500 Internal Server Error", request=MagicMock(), response=error_response
         )
         mock_radarr_client.ensure_movie.side_effect = http_error
 
@@ -408,7 +408,9 @@ class TestSyncService:
         assert result.queued[0] == "Test Movie"
 
     @pytest.mark.asyncio
-    async def test_sync_multiple_suggestions_mixed_results(self, sync_service, mock_radarr_client, sample_suggestions):
+    async def test_sync_multiple_suggestions_mixed_results(
+        self, sync_service, mock_radarr_client, sample_suggestions
+    ):
         """Test sync with multiple suggestions having mixed outcomes."""
         # Mock existing movies (empty)
         mock_radarr_client.list_movies.return_value = []
@@ -443,7 +445,7 @@ class TestSyncService:
             dry_run=False,
             queued=["Movie 1", "Movie 2"],
             skipped=["Movie 3"],
-            errors=["Movie 4: Error"]
+            errors=["Movie 4: Error"],
         )
 
         assert summary.total_candidates == 3  # queued + skipped (errors don't count as candidates)

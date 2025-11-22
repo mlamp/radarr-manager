@@ -496,7 +496,7 @@ class TestLoadSettings:
 
         env_vars = {
             "RADARR_API_KEY": "env-key",  # Should override TOML
-            "LLM_PROVIDER": "openai",     # Should override TOML
+            "LLM_PROVIDER": "openai",  # Should override TOML
         }
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
@@ -508,8 +508,8 @@ class TestLoadSettings:
                 result = load_settings(config_path=config_path, load_env=False)
 
                 assert result.settings.radarr_base_url == "http://toml:7878"  # From TOML
-                assert result.settings.radarr_api_key == "env-key"           # From env
-                assert result.settings.llm_provider == "openai"             # From env
+                assert result.settings.radarr_api_key == "env-key"  # From env
+                assert result.settings.llm_provider == "openai"  # From env
         finally:
             config_path.unlink()
 
@@ -538,7 +538,9 @@ class TestLoadSettings:
 
             # Should succeed with default settings since file doesn't exist
             assert isinstance(result.settings, Settings)
-            assert result.source_path == nonexistent_path  # Returns the path even if it doesn't exist
+            assert (
+                result.source_path == nonexistent_path
+            )  # Returns the path even if it doesn't exist
 
     def test_load_settings_malformed_toml(self):
         """Test loading settings with malformed TOML file."""
@@ -622,8 +624,8 @@ class TestSettingsIntegration:
 
         env_vars = {
             "RADARR_API_KEY": "env-override-key",  # Override missing TOML value
-            "LLM_PROVIDER": "openai",              # Override TOML value
-            "OPENAI_API_KEY": "env-openai-key",    # Additional env value
+            "LLM_PROVIDER": "openai",  # Override TOML value
+            "OPENAI_API_KEY": "env-openai-key",  # Additional env value
         }
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:

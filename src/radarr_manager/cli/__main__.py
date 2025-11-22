@@ -224,6 +224,49 @@ def config(show_sources: bool = typer.Option(False, help="Display provider hints
         )
 
 
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", help="Host to bind the MCP server to"),
+    port: int = typer.Option(8080, help="Port to bind the MCP server to"),
+    debug: bool = typer.Option(False, help="Enable debug logging"),
+) -> None:
+    """Run radarr-manager as an MCP service for AI agents.
+
+    Starts a long-running MCP (Model Context Protocol) server that exposes
+    radarr-manager functionality as structured tools for AI agents like
+    Telegram bots, Discord bots, or other LLM applications.
+
+    Tools available:
+    - search_movie: Check if movie exists in Radarr
+    - add_movie: Add with quality gating
+    - analyze_quality: Get quality analysis
+    - discover_movies: Find blockbusters
+    - sync_movies: Discover and sync
+
+    Example:
+        radarr-manager serve --host 0.0.0.0 --port 8080
+    """
+    if debug:
+        _setup_logging(logging.INFO)
+
+    typer.secho(
+        f"🚀 Starting MCP server on {host}:{port}...",
+        fg=typer.colors.GREEN,
+    )
+    typer.echo(
+        "Available tools: search_movie, add_movie, analyze_quality, discover_movies, sync_movies"
+    )
+    typer.echo("Press Ctrl+C to stop")
+
+    # Import and run MCP server
+    from radarr_manager.mcp.server import run_mcp_server
+
+    try:
+        asyncio.run(run_mcp_server())
+    except KeyboardInterrupt:
+        typer.echo("\n👋 MCP server stopped")
+
+
 def main() -> None:
     """Expose Typer app for the console script."""
     app()

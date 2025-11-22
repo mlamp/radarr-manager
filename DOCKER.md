@@ -202,6 +202,89 @@ docker run --rm \
 # Handle quality gate with --force flag if user confirms
 ```
 
+### MCP Service Mode (v1.8.0+)
+
+Run radarr-manager as a long-running MCP (Model Context Protocol) server for AI agent integration.
+
+**Why MCP Service Mode?**
+- Persistent service eliminates startup overhead
+- Connection pooling for better performance
+- Native tool API for AI agents (Telegram bots, Discord bots)
+- Structured responses without parsing
+
+**Start MCP Server:**
+
+```bash
+# Run as daemon service
+docker run -d \
+  --name radarr-manager-mcp \
+  --env-file /mnt/user/appdata/radarr-manager/.env \
+  --network host \
+  --restart unless-stopped \
+  mlamp/radarr-manager:1.8.0 \
+  serve --host 0.0.0.0 --debug
+
+# Check logs
+docker logs -f radarr-manager-mcp
+
+# Stop service
+docker stop radarr-manager-mcp
+```
+
+**Available MCP Tools:**
+- `search_movie` - Check if movie exists in Radarr
+- `add_movie` - Add with quality gating
+- `analyze_quality` - Get quality analysis without adding
+- `discover_movies` - Find blockbuster suggestions
+- `sync_movies` - Discover and sync in one call
+
+**Docker Compose MCP Service:**
+
+```yaml
+version: '3.8'
+
+services:
+  radarr-manager-mcp:
+    image: mlamp/radarr-manager:1.8.0
+    container_name: radarr-manager-mcp
+    command: serve --host 0.0.0.0 --debug
+    env_file: /mnt/user/appdata/radarr-manager/.env
+    network_mode: host
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "radarr-manager"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+**Integration Example (Telegram Bot):**
+
+Your Telegram bot connects to the MCP server and calls tools directly:
+
+```python
+from mcp import Client
+
+# Connect to MCP server
+mcp = Client("stdio://docker exec radarr-manager-mcp radarr-manager serve")
+
+# Call add_movie tool
+async def handle_movie_request(title: str, year: int):
+    result = await mcp.call_tool("add_movie", {
+        "title": title,
+        "year": year,
+        "dry_run": False,
+        "quality_threshold": 5.0
+    })
+
+    if result["success"]:
+        return f"✅ Added {title}!"
+    elif result["error"] == "quality_too_low":
+        return f"⚠️ Poor quality (score: {result['quality_analysis']['overall_score']}/10)"
+    else:
+        return f"❌ {result['message']}"
+```
+
 ## Advanced Configuration
 
 ### Using Environment Files
