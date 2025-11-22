@@ -427,6 +427,8 @@ radarr-manager sync --force --limit 2
 
 Run radarr-manager as a long-running MCP (Model Context Protocol) server for AI agent integration. Perfect for Telegram bots, Discord bots, or any LLM application that needs to interact with Radarr.
 
+For comprehensive MCP documentation including client integration, all tools, and examples, see **[MCP.md](MCP.md)**.
+
 ### Why MCP Mode?
 
 **CLI Approach** (subprocess overhead):
