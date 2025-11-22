@@ -15,10 +15,14 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = (
     "You are a film research assistant. Always return a single JSON object with a 'suggestions' array. "
     "Each element MUST include: title, optional release_date (YYYY-MM-DD), overview, franchise, confidence (0-1), "
-    "sources (array of URLs or outlet names), and MANDATORY metadata object with tmdb_id, imdb_id, and imdb_rating. "
-    "CRITICAL: For EVERY movie suggestion, you MUST search for and include both tmdb_id (numeric TMDB ID), imdb_id (string like tt1234567), "
-    "AND imdb_rating (numeric rating like 7.3) in the metadata object. Use web_search to find current IMDb ratings. "
-    "Example format: {\"title\": \"Movie Title\", \"metadata\": {\"tmdb_id\": 12345, \"imdb_id\": \"tt1234567\", \"imdb_rating\": 7.3}, ...} "
+    "sources (array of URLs or outlet names), and MANDATORY metadata object with comprehensive ratings data. "
+    "CRITICAL: For EVERY movie suggestion, you MUST search for and include in the metadata object: "
+    "- tmdb_id (numeric TMDB ID), imdb_id (string like tt1234567), imdb_rating (numeric, e.g. 7.3), imdb_votes (integer) "
+    "- rt_critics_score (Rotten Tomatoes critics %, 0-100), rt_audience_score (RT audience %, 0-100) "
+    "- metacritic_score (Metacritic score, 0-100, null if unavailable) "
+    "Use web_search to find current ratings from IMDb, Rotten Tomatoes, and Metacritic. "
+    "Example format: {\"title\": \"Movie Title\", \"metadata\": {\"tmdb_id\": 12345, \"imdb_id\": \"tt1234567\", \"imdb_rating\": 7.3, "
+    "\"imdb_votes\": 45000, \"rt_critics_score\": 85, \"rt_audience_score\": 92, \"metacritic_score\": 78}, ...} "
     "Focus on major film releases from the past three months or the next four months that have strong commercial momentum. "
     "Include: blockbusters, franchises (Marvel, DC, Disney, Universal, Warner Bros), prestige films (Lionsgate, A24, Sony Pictures, "
     "Neon, Searchlight, Focus Features, Aura Entertainment, IFC, Bleecker Street), AND well-reviewed mid-budget theatrical releases "
@@ -141,12 +145,13 @@ class OpenAIProvider(MovieDiscoveryProvider):
     def _build_prompt(self, *, limit: int, region: str) -> str:
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         return (
-            "Use web_search for upcoming/recent wide theatrical movies. Search: box office predictions, IMDb/TMDB ratings, "
-            "Rotten Tomatoes (https://www.rottentomatoes.com/browse/movies_in_theaters for currently playing), "
-            "and recent 2025 theatrical releases from Aug-Nov. Include blockbusters, franchises, prestige films, AND "
+            "Use web_search for upcoming/recent wide theatrical movies. Search: IMDb, Rotten Tomatoes "
+            "(https://www.rottentomatoes.com/browse/movies_in_theaters for currently playing), Metacritic, and TMDB. "
+            "Include recent 2025 theatrical releases from Aug-Nov, blockbusters, franchises, prestige films, AND "
             "mid-budget releases (action-comedies, dramedies). PRIORITIZE movies featuring Academy Award-winning actors "
             "(Best Actor/Best Actress winners). When available, prefer films with Oscar-winning lead performances. "
-            f"REQUIRED: TMDB ID, IMDB ID, and current IMDb rating for each movie. {timestamp}. Max {limit} movies for region {region}."
+            f"REQUIRED for each movie: TMDB ID, IMDb ID, IMDb rating + vote count, RT critics score, RT audience score, "
+            f"Metacritic score (if available). {timestamp}. Max {limit} movies for region {region}."
         )
 
     def _extract_json(self, response: Any) -> dict[str, Any]:

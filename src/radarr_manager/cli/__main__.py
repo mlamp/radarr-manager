@@ -67,6 +67,10 @@ def sync(
         False,
         help="Add movies even if a potential duplicate is detected.",
     ),
+    deep_analysis: bool = typer.Option(
+        False,
+        help="Enable deep per-movie analysis with multi-source ratings validation and red flag detection.",
+    ),
     debug: bool = typer.Option(False, help="Enable debug logging to see detailed discovery process."),
 ) -> None:
     """Synchronize discovered movies with Radarr."""
@@ -97,6 +101,8 @@ def sync(
             limit=limit,
             dry_run=dry_run,
             force=force,
+            deep_analysis=deep_analysis,
+            debug=debug,
         ),
     )
 
@@ -259,12 +265,81 @@ async def _run_sync(
     limit: int,
     dry_run: bool,
     force: bool,
+    deep_analysis: bool = False,
+    debug: bool = False,
 ) -> None:
     suggestions = await discovery.discover(limit=limit)
 
     if not suggestions:
         typer.secho("No suggestions to sync.", fg=typer.colors.YELLOW)
         return
+
+    # Apply deep analysis if requested
+    filtered_suggestions = suggestions
+    if deep_analysis:
+        from radarr_manager.services import DeepAnalysisService
+
+        typer.secho(
+            f"\n[DEEP ANALYSIS] Analyzing {len(suggestions)} movies...",
+            fg=typer.colors.CYAN,
+            bold=True,
+        )
+        analyzer = DeepAnalysisService(debug=debug)
+        analyses = []
+        for movie in suggestions:
+            analysis = await analyzer.analyze_movie(movie)
+            analyses.append(analysis)
+
+        # Display analysis results
+        typer.echo()
+        for i, analysis in enumerate(analyses, 1):
+            meta = analysis.rating_details
+            typer.secho(f"{i}. {analysis.movie.title}", bold=True)
+            typer.echo(f"   Quality Score: {analysis.quality_score:.1f}/10")
+
+            # Format ratings with proper None handling
+            imdb_rating = meta['imdb_rating'] if meta['imdb_rating'] is not None else 'N/A'
+            imdb_votes = f"{meta['imdb_votes']:,}" if meta['imdb_votes'] else '0'
+            rt_critics = f"{meta['rt_critics_score']}%" if meta['rt_critics_score'] is not None else 'N/A'
+            rt_audience = f"{meta['rt_audience_score']}%" if meta['rt_audience_score'] is not None else 'N/A'
+            metacritic = meta['metacritic_score'] if meta['metacritic_score'] is not None else 'N/A'
+
+            typer.echo(
+                f"   Ratings: IMDb {imdb_rating} ({imdb_votes} votes) | "
+                f"RT Critics {rt_critics} | RT Audience {rt_audience} | Metacritic {metacritic}"
+            )
+            typer.echo(f"   {analysis.recommendation}")
+            if analysis.red_flags:
+                typer.secho(f"   ⚠ Red Flags ({len(analysis.red_flags)}):", fg=typer.colors.RED)
+                for flag in analysis.red_flags[:3]:
+                    typer.echo(f"     • {flag}")
+            if analysis.strengths:
+                typer.secho(f"   ✓ Strengths ({len(analysis.strengths)}):", fg=typer.colors.GREEN)
+                for strength in analysis.strengths[:3]:
+                    typer.echo(f"     • {strength}")
+            if analysis.should_add:
+                typer.secho("   → WILL ADD", fg=typer.colors.GREEN, bold=True)
+            else:
+                typer.secho("   → WILL SKIP", fg=typer.colors.YELLOW, bold=True)
+            typer.echo()
+
+        # Filter to only movies that passed deep analysis
+        filtered_suggestions = [a.movie for a in analyses if a.should_add]
+        skipped_count = len(suggestions) - len(filtered_suggestions)
+
+        typer.secho(
+            f"Deep Analysis Complete: {len(filtered_suggestions)} approved, "
+            f"{skipped_count} rejected\n",
+            fg=typer.colors.CYAN,
+            bold=True,
+        )
+
+        if not filtered_suggestions:
+            typer.secho(
+                "No movies passed deep analysis quality gates.",
+                fg=typer.colors.YELLOW,
+            )
+            return
 
     assert settings_state.radarr_base_url is not None
     assert settings_state.radarr_api_key is not None
@@ -281,7 +356,7 @@ async def _run_sync(
             minimum_availability=settings_state.minimum_availability,
             tags=settings_state.tags,
         )
-        summary = await service.sync(suggestions, dry_run=dry_run, force=force)
+        summary = await service.sync(filtered_suggestions, dry_run=dry_run, force=force)
 
     typer.secho(
         f"Queued: {len(summary.queued)} | Skipped: {len(summary.skipped)} | Errors: {len(summary.errors)}",
