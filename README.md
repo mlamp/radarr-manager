@@ -5,8 +5,13 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 ## Features
 
 - 🎬 **Intelligent Movie Discovery**: Uses LLM providers (OpenAI) with web search for real-time box office trends
-- 🔍 **Deep Analysis Mode (v1.6.0)**: Multi-source ratings validation with RT, IMDb, and Metacritic
-  - Quality scoring with configurable thresholds
+- ➕ **Manual Movie Addition with Quality Gate (v1.7.0)**: Add specific movies by title with smart filtering
+  - Intelligent quality gating blocks bad movies (configurable threshold)
+  - Override support for guilty pleasures (`--force` flag)
+  - Multi-source ratings analysis (RT, IMDb, Metacritic)
+  - Detailed quality scores, red flags, and recommendations in JSON
+- 🔍 **Deep Analysis Mode (v1.6.0)**: Multi-source ratings validation
+  - Quality scoring with configurable thresholds (default: 5.0/10)
   - Red flag detection (poor ratings, low votes, score gaps)
   - Automated filtering of low-quality movies
 - 🔄 **Safe Sync Operations**: Dry-run mode for validation before making changes
@@ -14,6 +19,7 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 - 🏷️ **Smart Tagging**: Automatic tagging and quality profile assignment
 - 🎯 **Oscar Winner Priority**: Prioritizes movies featuring Academy Award winners
 - 🔍 **Duplicate Detection**: Prevents adding movies already in your Radarr library
+- 🤖 **Bot-Friendly**: JSON output and exit codes for programmatic integration (Starr Butler, etc.)
 - 🧪 **Comprehensive Testing**: 119+ test cases with integration test support
 
 ## Requirements
@@ -183,6 +189,192 @@ The `--deep-analysis` flag enables comprehensive per-movie evaluation:
 ```bash
 # Enable deep analysis for quality filtering
 radarr-manager sync --limit 10 --dry-run --deep-analysis --debug
+```
+
+#### `add`
+Manually add a specific movie to Radarr with intelligent quality gating:
+
+```bash
+radarr-manager add [OPTIONS]
+
+Options:
+  --title TEXT                    Movie title to search for
+  --year INTEGER                  Release year (for better accuracy)
+  --tmdb-id INTEGER              TMDB ID (e.g., 123456)
+  --imdb-id TEXT                 IMDB ID (e.g., tt1234567)
+  --dry-run / --no-dry-run       Preview without changes (default: --dry-run)
+  --force / --no-force           Bypass quality gate and add regardless (default: --no-force)
+  --deep-analysis / --no-deep    Enable quality analysis (default: --deep-analysis)
+  --quality-threshold FLOAT      Minimum score (0-10) to auto-add (default: 5.0)
+  --json / --no-json             Output as JSON (default: --json)
+  --debug                        Enable debug logging
+  --help                         Show this message and exit
+```
+
+**New in v1.7.0: Intelligent Quality Gating**
+
+The `add` command now includes smart quality filtering that protects your library from bad movies while allowing voice override for guilty pleasures:
+
+- **Quality Gate**: Movies below `--quality-threshold` (default 5.0/10) are blocked
+- **Multi-Source Ratings**: RT critics/audience, IMDb, Metacritic analysis
+- **Override Support**: Use `--force` to bypass quality gate
+- **Detailed Feedback**: JSON includes quality scores, red flags, and override instructions
+
+**Usage Examples:**
+
+```bash
+# Basic add with quality gate (deep-analysis enabled by default)
+radarr-manager add --title "Dune: Part Three" --year 2026 --no-dry-run
+
+# Skip quality checks for fast add
+radarr-manager add --title "The Batman Part II" --year 2026 --no-deep-analysis --no-dry-run
+
+# Custom quality threshold (stricter filtering)
+radarr-manager add --title "Borderline Movie" --year 2024 --quality-threshold 7.0
+
+# Force add a low-quality movie (override quality gate)
+radarr-manager add --title "Movie 43" --year 2013 --force --no-dry-run
+
+# Add by TMDB ID (most accurate, skips quality analysis)
+radarr-manager add --tmdb-id 123456 --no-deep-analysis --no-dry-run
+
+# Human-readable output
+radarr-manager add --title "Interstellar" --year 2014 --no-json
+```
+
+**JSON Output Format:**
+
+Success with quality analysis:
+```json
+{
+  "success": true,
+  "message": "Successfully added: Dune: Part Three (2026)",
+  "movie": {
+    "title": "Dune: Part Three",
+    "year": 2026,
+    "tmdb_id": 1170608,
+    "imdb_id": "tt15239678"
+  },
+  "quality_analysis": {
+    "overall_score": 8.5,
+    "threshold": 5.0,
+    "passed": true,
+    "recommendation": "RECOMMENDED - Strong quality, worth adding",
+    "ratings": {
+      "rotten_tomatoes": {
+        "critics_score": 92,
+        "audience_score": 89
+      },
+      "imdb": {
+        "score": 8.7,
+        "votes": 125000
+      },
+      "metacritic": {
+        "score": 85
+      }
+    },
+    "red_flags": []
+  }
+}
+```
+
+Quality gate rejection:
+```json
+{
+  "success": false,
+  "error": "quality_too_low",
+  "message": "Movie has poor ratings (score: 2.5/10, threshold: 5.0)",
+  "movie": {
+    "title": "Movie 43",
+    "year": 2013,
+    "tmdb_id": 63535
+  },
+  "quality_analysis": {
+    "overall_score": 2.5,
+    "threshold": 5.0,
+    "passed": false,
+    "recommendation": "NOT RECOMMENDED - Quality concerns, likely skip",
+    "ratings": {
+      "rotten_tomatoes": {
+        "critics_score": 4,
+        "audience_score": 18
+      },
+      "imdb": {
+        "score": 4.3,
+        "votes": 95420
+      },
+      "metacritic": {
+        "score": 18
+      }
+    },
+    "red_flags": [
+      "Extremely low critic consensus (Rotten Tomatoes: 4%)",
+      "IMDb rating below 5.0 indicates poor quality",
+      "Metacritic in 'overwhelming dislike' range (< 40)"
+    ]
+  },
+  "can_override": true,
+  "override_instructions": "To add this movie anyway, use: radarr-manager add --title \"Movie 43\" --year 2013 --force"
+}
+```
+
+Already exists:
+```json
+{
+  "success": false,
+  "error": "already_exists",
+  "message": "Movie already in Radarr library: Inception (2010)",
+  "movie": {
+    "title": "Inception",
+    "year": 2010,
+    "tmdb_id": 27205
+  },
+  "override_instructions": "This check cannot be bypassed with --force"
+}
+```
+
+Force override (with warning):
+```json
+{
+  "success": true,
+  "message": "Successfully added: Movie 43 (2013)",
+  "warning": "This movie has poor ratings but was added due to --force flag",
+  "movie": {
+    "title": "Movie 43",
+    "year": 2013,
+    "tmdb_id": 63535,
+    "imdb_id": "tt1667003"
+  },
+  "quality_analysis": {
+    "overall_score": 2.5,
+    "threshold": 5.0,
+    "passed": false,
+    "recommendation": "NOT RECOMMENDED - Quality concerns, likely skip",
+    "ratings": {...},
+    "red_flags": [...]
+  }
+}
+```
+
+**Exit Codes:**
+- `0`: Success
+- `1`: Movie not found
+- `2`: Already exists (duplicate)
+- `3`: Quality too low (with --deep-analysis)
+- `4`: Radarr API error
+- `5`: Other errors
+
+**Integration with Starr Butler:**
+
+The `add` command is designed for programmatic use by voice bots and automation tools. The JSON output and exit codes make it easy to integrate:
+
+```bash
+# Example: Telegram bot calling radarr-manager via Docker
+docker run --rm \
+  --env-file /mnt/user/appdata/radarr-manager/.env \
+  --network host \
+  mlamp/radarr-manager:latest \
+  add --title "Movie Title" --year 2026 --no-dry-run
 ```
 
 #### `config`

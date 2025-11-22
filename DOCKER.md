@@ -108,6 +108,97 @@ docker run --rm \
 - Detects red flags (poor ratings, low votes, score gaps)
 - Filters out movies scoring < 6.0 or with > 2 red flags
 
+### Manual Movie Addition with Quality Gate (v1.7.0+)
+
+Add specific movies with intelligent quality filtering:
+
+```bash
+# Basic add with quality gate (enabled by default)
+docker run --rm \
+  --env-file /mnt/user/appdata/radarr-manager/.env \
+  --network host \
+  mlamp/radarr-manager:latest \
+  add --title "Dune: Part Three" --year 2026 --no-dry-run
+```
+
+**Quality Gating Features:**
+- Blocks movies below quality threshold (default: 5.0/10)
+- Multi-source ratings: RT critics/audience, IMDb, Metacritic
+- Override support with `--force` flag for guilty pleasures
+- Detailed JSON output with quality scores and recommendations
+
+**Examples:**
+
+```bash
+# Skip quality checks for fast add
+docker run --rm \
+  --env-file /path/to/.env \
+  --network host \
+  mlamp/radarr-manager:latest \
+  add --title "The Batman Part II" --year 2026 --no-deep-analysis --no-dry-run
+
+# Custom quality threshold (stricter filtering)
+docker run --rm \
+  --env-file /path/to/.env \
+  mlamp/radarr-manager:latest \
+  add --title "Borderline Movie" --year 2024 --quality-threshold 7.0
+
+# Force add a low-quality movie (override quality gate)
+docker run --rm \
+  --env-file /path/to/.env \
+  mlamp/radarr-manager:latest \
+  add --title "Movie 43" --year 2013 --force --no-dry-run
+
+# JSON output for bot integration (default)
+docker run --rm \
+  --env-file /path/to/.env \
+  mlamp/radarr-manager:latest \
+  add --title "Inception" --year 2010
+
+# Human-readable output
+docker run --rm \
+  --env-file /path/to/.env \
+  mlamp/radarr-manager:latest \
+  add --title "Interstellar" --year 2014 --no-json
+```
+
+**JSON Response Example (Quality Rejection):**
+```json
+{
+  "success": false,
+  "error": "quality_too_low",
+  "message": "Movie has poor ratings (score: 2.5/10, threshold: 5.0)",
+  "quality_analysis": {
+    "overall_score": 2.5,
+    "threshold": 5.0,
+    "passed": false,
+    "recommendation": "NOT RECOMMENDED - Quality concerns, likely skip",
+    "ratings": {
+      "rotten_tomatoes": {"critics_score": 4, "audience_score": 18},
+      "imdb": {"score": 4.3, "votes": 95420},
+      "metacritic": {"score": 18}
+    },
+    "red_flags": [...]
+  },
+  "can_override": true,
+  "override_instructions": "To add this movie anyway, use: radarr-manager add --title \"Movie 43\" --year 2013 --force"
+}
+```
+
+**Integration with Starr Butler (Telegram Bot):**
+```bash
+# Telegram bot calls radarr-manager via Docker
+docker run --rm \
+  --env-file /mnt/user/appdata/radarr-manager/.env \
+  --network host \
+  mlamp/radarr-manager:latest \
+  add --title "$MOVIE_TITLE" --year $YEAR --no-dry-run
+
+# Parse JSON response
+# Check exit code: 0=success, 1=not found, 2=duplicate, 3=quality too low
+# Handle quality gate with --force flag if user confirms
+```
+
 ## Advanced Configuration
 
 ### Using Environment Files

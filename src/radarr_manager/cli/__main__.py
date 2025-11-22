@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import typer
 
@@ -39,7 +39,9 @@ def discover(
         None,
         help="Override the configured discovery provider (e.g. openai, gemini).",
     ),
-    debug: bool = typer.Option(False, help="Enable debug logging to see detailed discovery process."),
+    debug: bool = typer.Option(
+        False, help="Enable debug logging to see detailed discovery process."
+    ),
 ) -> None:
     """Discover blockbuster releases using the configured content providers."""
     if debug:
@@ -69,9 +71,14 @@ def sync(
     ),
     deep_analysis: bool = typer.Option(
         False,
-        help="Enable deep per-movie analysis with multi-source ratings validation and red flag detection.",
+        help=(
+            "Enable deep per-movie analysis with multi-source ratings "
+            "validation and red flag detection."
+        ),
     ),
-    debug: bool = typer.Option(False, help="Enable debug logging to see detailed discovery process."),
+    debug: bool = typer.Option(
+        False, help="Enable debug logging to see detailed discovery process."
+    ),
 ) -> None:
     """Synchronize discovered movies with Radarr."""
     if debug:
@@ -110,37 +117,62 @@ def sync(
 @app.command()
 def add(
     title: str | None = typer.Option(None, help="Movie title to search for."),
-    year: int | None = typer.Option(None, help="Release year (used with --title for better accuracy)."),
+    year: int | None = typer.Option(
+        None, help="Release year (used with --title for better accuracy)."
+    ),
     tmdb_id: int | None = typer.Option(None, help="TMDB ID (e.g., 123456)."),
     imdb_id: str | None = typer.Option(None, help="IMDB ID (e.g., tt1234567)."),
     dry_run: bool = typer.Option(True, help="Preview actions without modifying Radarr."),
-    force: bool = typer.Option(False, help="Add movie even if a potential duplicate is detected."),
+    force: bool = typer.Option(False, help="Bypass quality gate and add regardless of score."),
+    deep_analysis: bool = typer.Option(
+        True,
+        help="Enable quality analysis with multi-source ratings (default: enabled).",
+    ),
+    quality_threshold: float = typer.Option(
+        5.0,
+        help="Minimum quality score (0-10) required to auto-add movie.",
+        min=0.0,
+        max=10.0,
+    ),
+    json_output: bool = typer.Option(
+        True, "--json/--no-json", help="Output as JSON for programmatic use."
+    ),
     debug: bool = typer.Option(False, help="Enable debug logging."),
 ) -> None:
-    """Manually add a movie to Radarr by title, TMDB ID, or IMDB ID."""
+    """Manually add a movie to Radarr with intelligent quality gating."""
     if debug:
         _setup_logging(logging.INFO)
 
     # Validate input: must provide either (title) or (tmdb_id) or (imdb_id)
     if not any([title, tmdb_id, imdb_id]):
-        typer.secho(
-            "Error: Must provide either --title, --tmdb-id, or --imdb-id",
-            fg=typer.colors.RED,
-        )
+        if json_output:
+            _output_json_error(
+                "invalid_input", "Must provide either --title, --tmdb-id, or --imdb-id"
+            )
+        else:
+            typer.secho(
+                "Error: Must provide either --title, --tmdb-id, or --imdb-id",
+                fg=typer.colors.RED,
+            )
         raise typer.Exit(code=1)
 
     load_result = _safe_load_settings()
     if load_result is None:
-        raise typer.Exit(code=1)
+        if json_output:
+            _output_json_error("config_error", "Failed to load settings")
+        raise typer.Exit(code=5)
 
     settings = load_result.settings
     try:
         settings.require_radarr()
     except SettingsError as exc:
-        typer.secho(str(exc), fg=typer.colors.RED)
-        raise typer.Exit(code=1) from exc
+        if json_output:
+            _output_json_error("config_error", str(exc))
+        else:
+            typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=5) from exc
 
-    asyncio.run(
+    exit_code = asyncio.run(
         _run_add(
             settings=settings,
             title=title,
@@ -149,8 +181,13 @@ def add(
             imdb_id=imdb_id,
             dry_run=dry_run,
             force=force,
+            deep_analysis=deep_analysis,
+            quality_threshold=quality_threshold,
+            json_output=json_output,
+            debug=debug,
         ),
     )
+    raise typer.Exit(code=exit_code)
 
 
 @app.command()
@@ -192,7 +229,7 @@ def main() -> None:
     app()
 
 
-def _safe_load_settings(load_even_if_missing: bool = False) -> Optional[SettingsLoadResult]:
+def _safe_load_settings(load_even_if_missing: bool = False) -> SettingsLoadResult | None:
     try:
         return load_settings()
     except SettingsError as exc:
@@ -239,8 +276,7 @@ def _render_discover_results(
     for idx, suggestion in enumerate(suggestions, start=1):
         year = suggestion.year or "TBA"
         typer.echo(
-            f"{idx}. {suggestion.title} ({year})"
-            f" • confidence={suggestion.confidence:.2f}"
+            f"{idx}. {suggestion.title} ({year})" f" • confidence={suggestion.confidence:.2f}"
         )
         if suggestion.overview:
             typer.echo(f"   {suggestion.overview}")
@@ -298,11 +334,15 @@ async def _run_sync(
             typer.echo(f"   Quality Score: {analysis.quality_score:.1f}/10")
 
             # Format ratings with proper None handling
-            imdb_rating = meta['imdb_rating'] if meta['imdb_rating'] is not None else 'N/A'
-            imdb_votes = f"{meta['imdb_votes']:,}" if meta['imdb_votes'] else '0'
-            rt_critics = f"{meta['rt_critics_score']}%" if meta['rt_critics_score'] is not None else 'N/A'
-            rt_audience = f"{meta['rt_audience_score']}%" if meta['rt_audience_score'] is not None else 'N/A'
-            metacritic = meta['metacritic_score'] if meta['metacritic_score'] is not None else 'N/A'
+            imdb_rating = meta["imdb_rating"] if meta["imdb_rating"] is not None else "N/A"
+            imdb_votes = f"{meta['imdb_votes']:,}" if meta["imdb_votes"] else "0"
+            rt_critics = (
+                f"{meta['rt_critics_score']}%" if meta["rt_critics_score"] is not None else "N/A"
+            )
+            rt_audience = (
+                f"{meta['rt_audience_score']}%" if meta["rt_audience_score"] is not None else "N/A"
+            )
+            metacritic = meta["metacritic_score"] if meta["metacritic_score"] is not None else "N/A"
 
             typer.echo(
                 f"   Ratings: IMDb {imdb_rating} ({imdb_votes} votes) | "
@@ -359,7 +399,9 @@ async def _run_sync(
         summary = await service.sync(filtered_suggestions, dry_run=dry_run, force=force)
 
     typer.secho(
-        f"Queued: {len(summary.queued)} | Skipped: {len(summary.skipped)} | Errors: {len(summary.errors)}",
+        f"Queued: {len(summary.queued)} | "
+        f"Skipped: {len(summary.skipped)} | "
+        f"Errors: {len(summary.errors)}",
         fg=typer.colors.CYAN,
     )
     if summary.queued:
@@ -385,28 +427,48 @@ async def _run_add(
     imdb_id: str | None,
     dry_run: bool,
     force: bool,
-) -> None:
-    """Add a single movie to Radarr by lookup."""
+    deep_analysis: bool = True,
+    quality_threshold: float = 5.0,
+    json_output: bool = True,
+    debug: bool = False,
+) -> int:
+    """
+    Add a single movie to Radarr with intelligent quality gating.
+
+    Returns exit code:
+    - 0: Success
+    - 1: Movie not found
+    - 2: Already exists (duplicate)
+    - 3: Quality too low (rejected by quality gate)
+    - 4: Radarr API error
+    - 5: Other errors
+    """
+    import json
+
     assert settings.radarr_base_url is not None
     assert settings.radarr_api_key is not None
 
     # Build search term based on provided parameters
     if tmdb_id:
         search_term = f"tmdb:{tmdb_id}"
-        typer.echo(f"Searching for movie with TMDB ID: {tmdb_id}")
+        if not json_output:
+            typer.echo(f"Searching for movie with TMDB ID: {tmdb_id}")
     elif imdb_id:
         search_term = f"imdb:{imdb_id}"
-        typer.echo(f"Searching for movie with IMDB ID: {imdb_id}")
+        if not json_output:
+            typer.echo(f"Searching for movie with IMDB ID: {imdb_id}")
     elif title:
         if year:
             search_term = f"{title} {year}"
-            typer.echo(f"Searching for movie: {title} ({year})")
+            if not json_output:
+                typer.echo(f"Searching for movie: {title} ({year})")
         else:
             search_term = title
-            typer.echo(f"Searching for movie: {title}")
+            if not json_output:
+                typer.echo(f"Searching for movie: {title}")
     else:
-        typer.secho("Error: No search criteria provided", fg=typer.colors.RED)
-        return
+        _output_json_error("invalid_input", "No search criteria provided") if json_output else None
+        return 5
 
     async with RadarrClient(
         base_url=settings.radarr_base_url,
@@ -416,15 +478,21 @@ async def _run_add(
         try:
             results = await client.lookup_movie(search_term)
         except Exception as exc:
-            typer.secho(f"Error looking up movie: {exc}", fg=typer.colors.RED)
-            return
+            if json_output:
+                _output_json_error("radarr_error", f"Error looking up movie: {exc}")
+            else:
+                typer.secho(f"Error looking up movie: {exc}", fg=typer.colors.RED)
+            return 4
 
         if not results:
-            typer.secho("No movies found matching search criteria.", fg=typer.colors.YELLOW)
-            return
+            if json_output:
+                _output_json_error("movie_not_found", "No movies found matching search criteria")
+            else:
+                typer.secho("No movies found matching search criteria.", fg=typer.colors.YELLOW)
+            return 1
 
         # Display results and let user pick if multiple matches
-        if len(results) > 1:
+        if len(results) > 1 and not json_output:
             typer.echo(f"\nFound {len(results)} matches:")
             for idx, result in enumerate(results, start=1):
                 movie_title = result.get("title", "Unknown")
@@ -436,12 +504,13 @@ async def _run_add(
         movie_data = results[0]
         movie_title = movie_data.get("title", "Unknown")
         movie_year = movie_data.get("year", "Unknown")
+        movie_tmdb_id = movie_data.get("tmdbId")
+        movie_imdb_id = movie_data.get("imdbId")
 
-        typer.secho(f"\nFound: {movie_title} ({movie_year})", fg=typer.colors.GREEN)
-
-        # Display movie details
-        if overview := movie_data.get("overview"):
-            typer.echo(f"Overview: {overview[:200]}{'...' if len(overview) > 200 else ''}")
+        if not json_output:
+            typer.secho(f"\nFound: {movie_title} ({movie_year})", fg=typer.colors.GREEN)
+            if overview := movie_data.get("overview"):
+                typer.echo(f"Overview: {overview[:200]}{'...' if len(overview) > 200 else ''}")
 
         # Convert lookup result to MovieSuggestion for sync
         suggestion = MovieSuggestion(
@@ -452,10 +521,67 @@ async def _run_add(
             confidence=1.0,  # Manual addition = full confidence
             sources=["manual"],
             metadata={
-                "tmdb_id": movie_data.get("tmdbId"),
-                "imdb_id": movie_data.get("imdbId"),
+                "tmdb_id": movie_tmdb_id,
+                "imdb_id": movie_imdb_id,
             },
         )
+
+        # Deep analysis with quality gating
+        analysis = None
+        quality_score = None
+        if deep_analysis:
+            from radarr_manager.services import DeepAnalysisService
+
+            if not json_output:
+                typer.secho(
+                    f"\n[QUALITY ANALYSIS] Analyzing {movie_title}...", fg=typer.colors.CYAN
+                )
+
+            analyzer = DeepAnalysisService(debug=debug)
+            analysis = await analyzer.analyze_movie(suggestion)
+            quality_score = analysis.quality_score
+
+            if not json_output:
+                typer.echo(
+                    f"Quality Score: {quality_score:.1f}/10 (threshold: {quality_threshold})"
+                )
+                typer.echo(f"Recommendation: {analysis.recommendation}")
+                if analysis.red_flags:
+                    typer.secho(f"Red Flags ({len(analysis.red_flags)}):", fg=typer.colors.RED)
+                    for flag in analysis.red_flags[:3]:
+                        typer.echo(f"  • {flag}")
+
+            # Quality gate check (bypass with --force)
+            if not force and quality_score < quality_threshold:
+                if json_output:
+                    _output_json_with_quality_analysis(
+                        success=False,
+                        error="quality_too_low",
+                        message=(
+                            f"Movie has poor ratings "
+                            f"(score: {quality_score:.1f}/10, threshold: {quality_threshold})"
+                        ),
+                        movie_info={
+                            "title": movie_title,
+                            "year": movie_year,
+                            "tmdb_id": movie_tmdb_id,
+                        },
+                        analysis=analysis,
+                        quality_threshold=quality_threshold,
+                        can_override=True,
+                        override_cmd=(
+                            f'radarr-manager add --title "{movie_title}" '
+                            f"--year {movie_year} --force"
+                        ),
+                    )
+                else:
+                    typer.secho(
+                        f"\n✗ Quality gate blocked: {movie_title} "
+                        f"(score: {quality_score:.1f}/10 < {quality_threshold})",
+                        fg=typer.colors.RED,
+                    )
+                    typer.echo("   Use --force to override and add anyway")
+                return 3
 
         # Use SyncService to add the movie
         service = SyncService(
@@ -469,20 +595,147 @@ async def _run_add(
 
         summary = await service.sync([suggestion], dry_run=dry_run, force=force)
 
-        # Display results
-        if dry_run:
-            typer.secho("\n[DRY RUN] No changes made to Radarr", fg=typer.colors.CYAN)
-
+        # Determine exit code and output
         if summary.queued:
-            typer.secho(f"✓ Successfully queued: {movie_title}", fg=typer.colors.GREEN)
+            if json_output:
+                warning_msg = None
+                if force and analysis and quality_score and quality_score < quality_threshold:
+                    warning_msg = "This movie has poor ratings but was added due to --force flag"
+
+                _output_json_with_quality_analysis(
+                    success=True,
+                    message=f"Successfully added: {movie_title} ({movie_year})",
+                    movie_info={
+                        "title": movie_title,
+                        "year": movie_year,
+                        "tmdb_id": movie_tmdb_id,
+                        "imdb_id": movie_imdb_id,
+                    },
+                    analysis=analysis,
+                    quality_threshold=quality_threshold if analysis else None,
+                    warning=warning_msg,
+                )
+            else:
+                if dry_run:
+                    typer.secho("\n[DRY RUN] No changes made to Radarr", fg=typer.colors.CYAN)
+                if force and analysis and quality_score and quality_score < quality_threshold:
+                    typer.secho(
+                        f"⚠ Successfully queued: {movie_title} (quality override used)",
+                        fg=typer.colors.YELLOW,
+                    )
+                else:
+                    typer.secho(f"✓ Successfully queued: {movie_title}", fg=typer.colors.GREEN)
+            return 0
+
         elif summary.skipped:
-            typer.secho(f"⊘ Skipped: {movie_title}", fg=typer.colors.YELLOW)
-            if summary.skipped:
-                typer.echo(f"   Reason: {summary.skipped[0]}")
+            if json_output:
+                output = {
+                    "success": False,
+                    "error": "already_exists",
+                    "message": f"Movie already in Radarr library: {movie_title} ({movie_year})",
+                    "movie": {"title": movie_title, "year": movie_year, "tmdb_id": movie_tmdb_id},
+                    "override_instructions": "This check cannot be bypassed with --force",
+                }
+                typer.echo(json.dumps(output, indent=2))
+            else:
+                if dry_run:
+                    typer.secho("\n[DRY RUN] No changes made to Radarr", fg=typer.colors.CYAN)
+                typer.secho(f"⊘ Skipped: {movie_title}", fg=typer.colors.YELLOW)
+                typer.echo(
+                    f"   Reason: {summary.skipped[0] if summary.skipped else 'Already exists'}"
+                )
+            return 2
+
         elif summary.errors:
-            typer.secho(f"✗ Error adding: {movie_title}", fg=typer.colors.RED)
-            if summary.errors:
-                typer.echo(f"   Error: {summary.errors[0]}")
+            if json_output:
+                _output_json_error(
+                    "radarr_error",
+                    f"Error adding movie: {movie_title}",
+                    details={"error": summary.errors[0] if summary.errors else "unknown"},
+                )
+            else:
+                typer.secho(f"✗ Error adding: {movie_title}", fg=typer.colors.RED)
+                if summary.errors:
+                    typer.echo(f"   Error: {summary.errors[0]}")
+            return 4
+
+        # Fallback
+        return 5
+
+
+def _output_json_error(
+    error_code: str, message: str, details: dict[str, Any] | None = None
+) -> None:
+    """Output a JSON error message."""
+    import json
+
+    output = {
+        "success": False,
+        "error": error_code,
+        "message": message,
+    }
+    if details:
+        output["details"] = details
+    typer.echo(json.dumps(output, indent=2))
+
+
+def _output_json_with_quality_analysis(
+    success: bool,
+    message: str,
+    movie_info: dict[str, Any],
+    analysis: Any = None,
+    quality_threshold: float | None = None,
+    error: str | None = None,
+    can_override: bool = False,
+    override_cmd: str | None = None,
+    warning: str | None = None,
+) -> None:
+    """Output JSON with detailed quality analysis."""
+    import json
+
+    output: dict[str, Any] = {
+        "success": success,
+        "message": message,
+        "movie": movie_info,
+    }
+
+    if error:
+        output["error"] = error
+
+    if warning:
+        output["warning"] = warning
+
+    # Add detailed quality analysis if available
+    if analysis:
+        ratings_meta = analysis.rating_details
+        quality_analysis = {
+            "overall_score": analysis.quality_score,
+            "threshold": quality_threshold,
+            "passed": analysis.should_add,
+            "recommendation": analysis.recommendation,
+            "ratings": {
+                "rotten_tomatoes": {
+                    "critics_score": ratings_meta.get("rt_critics_score"),
+                    "audience_score": ratings_meta.get("rt_audience_score"),
+                },
+                "imdb": {
+                    "score": ratings_meta.get("imdb_rating"),
+                    "votes": ratings_meta.get("imdb_votes"),
+                },
+                "metacritic": {
+                    "score": ratings_meta.get("metacritic_score"),
+                },
+            },
+            "red_flags": analysis.red_flags,
+        }
+        output["quality_analysis"] = quality_analysis
+
+    if can_override:
+        output["can_override"] = True
+    if override_cmd:
+        output["override_instructions"] = f"To add this movie anyway, use: {override_cmd}"
+
+    typer.echo(json.dumps(output, indent=2))
 
 
 if __name__ == "__main__":
