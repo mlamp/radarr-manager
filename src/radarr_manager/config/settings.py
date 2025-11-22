@@ -33,6 +33,11 @@ class Settings(BaseModel):
     cache_ttl_hours: int = Field(default=6)
     region: str | None = Field(default=None)
 
+    # MCP Service Configuration
+    mcp_host: str = Field(default="127.0.0.1", alias="MCP_HOST")
+    mcp_port: int = Field(default=8091, alias="MCP_PORT")
+    mcp_transport: str = Field(default="stdio", alias="MCP_TRANSPORT")
+
     model_config = {
         "populate_by_name": True,
         "str_strip_whitespace": True,
@@ -159,6 +164,9 @@ def _collect_env_overrides() -> dict[str, Any]:
         "RADARR_TAGS": "tags",
         "RADARR_CACHE_TTL_HOURS": "cache_ttl_hours",
         "RADARR_REGION": "region",
+        "MCP_HOST": "mcp_host",
+        "MCP_PORT": "mcp_port",
+        "MCP_TRANSPORT": "mcp_transport",
     }
 
     result: dict[str, Any] = {}
@@ -166,7 +174,7 @@ def _collect_env_overrides() -> dict[str, Any]:
         if env_name not in os.environ:
             continue
         value = os.environ[env_name]
-        if field in {"quality_profile_id", "cache_ttl_hours"}:
+        if field in {"quality_profile_id", "cache_ttl_hours", "mcp_port"}:
             result[field] = int(value)
         elif field == "monitor":
             result[field] = value.lower() not in {"false", "0", "no"}

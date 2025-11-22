@@ -3,9 +3,13 @@
 import asyncio
 from typing import Any
 
+import uvicorn
 from mcp.server import Server
+from mcp.server.sse import SseServerTransport
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
+from starlette.applications import Starlette
+from starlette.routing import Route
 
 from radarr_manager.clients.radarr import RadarrClient
 from radarr_manager.config.settings import Settings
@@ -568,16 +572,45 @@ async def _sync_movies(settings: Settings, arguments: dict[str, Any]) -> list[Te
         return [TextContent(type="text", text=response.model_dump_json(indent=2))]
 
 
-async def run_mcp_server() -> None:
+async def run_mcp_server(settings: Settings) -> None:
     """Run the MCP server with stdio transport."""
     server = create_mcp_server()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
+async def run_mcp_http_server(settings: Settings, host: str, port: int) -> None:
+    """Run the MCP server with HTTP/SSE transport."""
+    from starlette.requests import Request
+
+    server = create_mcp_server()
+    sse = SseServerTransport("/messages")
+
+    async def handle_sse(request: Request):
+        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+            await server.run(streams[0], streams[1], server.create_initialization_options())
+
+    async def handle_messages(request: Request):
+        await sse.handle_post_message(request.scope, request.receive, request._send)
+
+    starlette_app = Starlette(
+        routes=[
+            Route("/sse", endpoint=handle_sse),
+            Route("/messages", endpoint=handle_messages, methods=["POST"]),
+        ]
+    )
+
+    config = uvicorn.Config(starlette_app, host=host, port=port, log_level="info")
+    server_instance = uvicorn.Server(config)
+    await server_instance.serve()
+
+
 def main() -> None:
     """Entry point for MCP server."""
-    asyncio.run(run_mcp_server())
+    from radarr_manager.config.settings import load_settings
+
+    settings = load_settings().settings
+    asyncio.run(run_mcp_server(settings))
 
 
 if __name__ == "__main__":

@@ -226,8 +226,15 @@ def config(show_sources: bool = typer.Option(False, help="Display provider hints
 
 @app.command()
 def serve(
-    host: str = typer.Option("127.0.0.1", help="Host to bind the MCP server to"),
-    port: int = typer.Option(8080, help="Port to bind the MCP server to"),
+    host: str | None = typer.Option(
+        None, help="Host to bind MCP server (default: MCP_HOST or 127.0.0.1)"
+    ),
+    port: int | None = typer.Option(
+        None, help="Port to bind MCP server (default: MCP_PORT or 8091)"
+    ),
+    transport: str | None = typer.Option(
+        None, help="Transport: stdio or sse (default: MCP_TRANSPORT or stdio)"
+    ),
     debug: bool = typer.Option(False, help="Enable debug logging"),
 ) -> None:
     """Run radarr-manager as an MCP service for AI agents.
@@ -235,6 +242,10 @@ def serve(
     Starts a long-running MCP (Model Context Protocol) server that exposes
     radarr-manager functionality as structured tools for AI agents like
     Telegram bots, Discord bots, or other LLM applications.
+
+    Transport modes:
+    - stdio: Process communication via stdin/stdout (for subprocess integration)
+    - sse: HTTP/SSE server on network (for remote clients)
 
     Tools available:
     - search_movie: Check if movie exists in Radarr
@@ -244,25 +255,47 @@ def serve(
     - sync_movies: Discover and sync
 
     Example:
-        radarr-manager serve --host 0.0.0.0 --port 8080
+        radarr-manager serve --host 0.0.0.0 --port 8091 --transport sse
     """
     if debug:
         _setup_logging(logging.INFO)
 
-    typer.secho(
-        f"🚀 Starting MCP server on {host}:{port}...",
-        fg=typer.colors.GREEN,
-    )
+    # Load settings for defaults
+    load_result = _safe_load_settings()
+    if load_result is None:
+        raise typer.Exit(code=1)
+
+    settings = load_result.settings
+
+    # CLI overrides or settings defaults
+    final_host = host if host is not None else settings.mcp_host
+    final_port = port if port is not None else settings.mcp_port
+    final_transport = transport if transport is not None else settings.mcp_transport
+
+    # Import MCP server functions
+    from radarr_manager.mcp.server import run_mcp_http_server, run_mcp_server
+
+    if final_transport == "sse":
+        typer.secho(
+            f"🚀 Starting MCP HTTP/SSE server on http://{final_host}:{final_port}...",
+            fg=typer.colors.GREEN,
+        )
+    else:
+        typer.secho(
+            "🚀 Starting MCP stdio server...",
+            fg=typer.colors.GREEN,
+        )
+
     typer.echo(
         "Available tools: search_movie, add_movie, analyze_quality, discover_movies, sync_movies"
     )
     typer.echo("Press Ctrl+C to stop")
 
-    # Import and run MCP server
-    from radarr_manager.mcp.server import run_mcp_server
-
     try:
-        asyncio.run(run_mcp_server())
+        if final_transport == "sse":
+            asyncio.run(run_mcp_http_server(settings, final_host, final_port))
+        else:
+            asyncio.run(run_mcp_server(settings))
     except KeyboardInterrupt:
         typer.echo("\n👋 MCP server stopped")
 
