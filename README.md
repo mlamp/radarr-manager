@@ -5,9 +5,14 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 ## Features
 
 - 🎬 **Intelligent Movie Discovery**: Uses LLM providers (OpenAI) with web search for real-time box office trends
+- 🔍 **Deep Analysis Mode (v1.6.0)**: Multi-source ratings validation with RT, IMDb, and Metacritic
+  - Quality scoring with configurable thresholds
+  - Red flag detection (poor ratings, low votes, score gaps)
+  - Automated filtering of low-quality movies
 - 🔄 **Safe Sync Operations**: Dry-run mode for validation before making changes
 - ⚙️ **Flexible Configuration**: Environment variables, .env files, or TOML configuration
 - 🏷️ **Smart Tagging**: Automatic tagging and quality profile assignment
+- 🎯 **Oscar Winner Priority**: Prioritizes movies featuring Academy Award winners
 - 🔍 **Duplicate Detection**: Prevents adding movies already in your Radarr library
 - 🧪 **Comprehensive Testing**: 119+ test cases with integration test support
 
@@ -159,10 +164,25 @@ Synchronize discovered movies with Radarr:
 radarr-manager sync [OPTIONS]
 
 Options:
-  --limit INTEGER     Number of suggestions to evaluate (default: 5)
+  --limit INTEGER              Number of suggestions to evaluate (default: 5)
   --dry-run / --no-dry-run    Preview without changes (default: --dry-run)
   --force / --no-force        Add even if duplicates detected (default: --no-force)
-  --help             Show this message and exit
+  --deep-analysis             Enable per-movie quality analysis (v1.6.0+)
+  --debug                     Show detailed analysis output
+  --help                      Show this message and exit
+```
+
+**New in v1.6.0: Deep Analysis Mode**
+
+The `--deep-analysis` flag enables comprehensive per-movie evaluation:
+- Fetches ratings from Rotten Tomatoes (critics + audience), IMDb, and Metacritic
+- Calculates quality scores (0-10) with weighted ratings
+- Detects red flags (poor ratings, low vote counts, score gaps)
+- Filters out low-quality movies automatically (score < 6.0 or >2 red flags)
+
+```bash
+# Enable deep analysis for quality filtering
+radarr-manager sync --limit 10 --dry-run --deep-analysis --debug
 ```
 
 #### `config`
@@ -184,9 +204,20 @@ radarr-manager discover --limit 10
 radarr-manager sync --dry-run --limit 5
 ```
 
+**Deep analysis with quality filtering (v1.6.0+)**:
+```bash
+# Analyze movies with multi-source ratings validation
+radarr-manager sync --limit 10 --dry-run --deep-analysis --debug
+```
+
 **Production sync** (adds movies to Radarr):
 ```bash
 radarr-manager sync --limit 3
+```
+
+**Production sync with deep analysis** (recommended):
+```bash
+radarr-manager sync --limit 10 --no-dry-run --deep-analysis
 ```
 
 **Force add duplicates**:
@@ -196,14 +227,11 @@ radarr-manager sync --force --limit 2
 
 ## Docker Usage
 
-### Running with Docker
+The Docker image is available at `mlamp/radarr-manager` on Docker Hub with multi-architecture support (amd64, arm64).
 
-The Docker image is available at `mlamp/radarr-manager` on Docker Hub.
+For comprehensive Docker documentation including advanced usage, networking, and scheduling, see **[DOCKER.md](DOCKER.md)**.
 
-**Basic usage:**
-```bash
-docker run --rm mlamp/radarr-manager:latest --help
-```
+### Quick Start with Docker
 
 **Discover movies:**
 ```bash
@@ -214,50 +242,16 @@ docker run --rm \
   mlamp/radarr-manager:latest discover --limit 10
 ```
 
-**Sync with dry-run:**
+**Sync with deep analysis (recommended):**
 ```bash
-docker run --rm --env-file .env \
-  mlamp/radarr-manager:latest sync --dry-run --limit 5
+docker run --rm \
+  --env-file /path/to/.env \
+  --network host \
+  mlamp/radarr-manager:latest \
+  sync --limit 10 --no-dry-run --deep-analysis --debug
 ```
 
-**Using environment file:**
-```bash
-# Create .env file with your configuration
-docker run --rm --env-file .env \
-  mlamp/radarr-manager:latest sync --limit 3
-```
-
-### Docker Compose
-
-Example `docker-compose.yml` for scheduled runs:
-
-```yaml
-version: '3.8'
-
-services:
-  radarr-manager:
-    image: mlamp/radarr-manager:latest
-    environment:
-      - RADARR_BASE_URL=http://radarr:7878
-      - RADARR_API_KEY=${RADARR_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=gpt-4o-mini
-      - RADARR_QUALITY_PROFILE_ID=4
-      - RADARR_ROOT_FOLDER_PATH=/movies
-      - RADARR_TAGS=auto-boxoffice
-    command: sync --limit 5
-    # Optionally schedule with cron or external scheduler
-```
-
-### Building from Source
-
-```bash
-# Build the image
-docker build -t radarr-manager:local .
-
-# Run your local build
-docker run --rm --env-file .env radarr-manager:local discover
-```
+See **[DOCKER.md](DOCKER.md)** for detailed examples, networking options, and docker-compose configurations.
 
 ## Development Workflow
 
