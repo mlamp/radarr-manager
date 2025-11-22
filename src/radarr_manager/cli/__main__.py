@@ -246,6 +246,7 @@ def serve(
     Transport modes:
     - stdio: Process communication via stdin/stdout (for subprocess integration)
     - sse: HTTP/SSE server on network (for remote clients)
+      Endpoints: /mcp/sse (SSE stream), /mcp/messages (POST)
 
     Tools available:
     - search_movie: Check if movie exists in Radarr
