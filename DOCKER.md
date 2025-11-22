@@ -36,13 +36,16 @@ docker run --rm \
 # Latest stable release
 mlamp/radarr-manager:latest
 
-# Specific version
+# Specific version (note: no 'v' prefix in Docker tags)
+mlamp/radarr-manager:1.7.0
 mlamp/radarr-manager:1.6.0
 
-# Specific version tags
+# Older version tags
 mlamp/radarr-manager:1.5.1
 mlamp/radarr-manager:1.5.0
 ```
+
+**Note:** Docker image tags use semantic versioning **without** the `v` prefix (e.g., `1.7.0`), while git tags include the `v` prefix (e.g., `v1.7.0`).
 
 ### Architecture Support
 
@@ -98,7 +101,7 @@ Use multi-source ratings validation to filter out low-quality movies:
 docker run --rm \
   --env-file /mnt/user/appdata/radarr-manager/.env \
   --network host \
-  mlamp/radarr-manager:1.6.0 \
+  mlamp/radarr-manager:1.7.0 \
   sync --limit 10 --no-dry-run --deep-analysis --debug
 ```
 
@@ -341,7 +344,7 @@ version: '3.8'
 
 services:
   radarr-manager:
-    image: mlamp/radarr-manager:1.6.0
+    image: mlamp/radarr-manager:1.7.0
     network_mode: host
     env_file: /mnt/user/appdata/radarr-manager/.env
     command: sync --limit 10 --no-dry-run --deep-analysis --debug
@@ -602,7 +605,7 @@ docker buildx build \
 docker run --rm \
   --env-file /mnt/user/appdata/radarr-manager/.env \
   --network host \
-  mlamp/radarr-manager:1.6.0 \
+  mlamp/radarr-manager:1.7.0 \
   sync --limit 10 --no-dry-run --deep-analysis --debug
 ```
 
