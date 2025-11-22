@@ -67,21 +67,54 @@ if result["error"] == "quality_too_low":
 
 ### Start MCP Server
 
+**stdio transport** (local clients, process communication):
 ```bash
-# Local development
 radarr-manager serve
+```
 
-# Production (network accessible)
-radarr-manager serve --host 0.0.0.0 --port 8080 --debug
+**sse transport** (HTTP/SSE, network accessible, v1.9.0+):
+```bash
+radarr-manager serve --transport sse --host 0.0.0.0 --port 8091
+```
 
-# Docker
+**Environment Configuration** (v1.9.0+):
+```bash
+export MCP_HOST=127.0.0.1    # Bind host (default: 127.0.0.1)
+export MCP_PORT=8091         # Bind port (default: 8091)
+export MCP_TRANSPORT=sse     # Transport: stdio or sse (default: stdio)
+
+radarr-manager serve  # Uses ENV vars
+```
+
+**Docker** (HTTP/SSE mode):
+```bash
 docker run -d \
   --name radarr-manager-mcp \
   --env-file .env \
-  --network host \
-  mlamp/radarr-manager:1.8.0 \
-  serve --host 0.0.0.0 --debug
+  -p 8091:8091 \
+  -e MCP_HOST=0.0.0.0 \
+  -e MCP_PORT=8091 \
+  -e MCP_TRANSPORT=sse \
+  mlamp/radarr-manager:latest \
+  serve --transport sse --host 0.0.0.0 --debug
+
+# MCP endpoints available at:
+# http://localhost:8091/mcp/sse       (SSE stream)
+# http://localhost:8091/mcp/messages  (POST messages)
 ```
+
+### Transport Modes (v1.9.0+)
+
+**stdio** - Process communication (default):
+- Best for: Local clients, subprocess integration
+- Connection: `stdio://radarr-manager serve`
+- No network ports required
+
+**sse** - HTTP/SSE server:
+- Best for: Network clients, remote services, homelab deployments
+- Endpoints: `/mcp/sse` (SSE stream), `/mcp/messages` (POST)
+- Connection: HTTP client to `http://host:port/mcp/sse`
+- Supports multiple concurrent clients
 
 ### Python Client
 
@@ -89,12 +122,27 @@ docker run -d \
 pip install mcp
 ```
 
+**stdio transport:**
 ```python
 from mcp import Client
 
 async def main():
     async with Client("stdio://radarr-manager serve") as mcp:
         # Check if movie exists
+        result = await mcp.call_tool("search_movie", {
+            "title": "Inception",
+            "year": 2010
+        })
+        print(result["exists"])  # True/False
+```
+
+**sse transport** (v1.9.0+):
+```python
+from mcp import Client
+
+async def main():
+    # Connect to HTTP/SSE server
+    async with Client("http://localhost:8091/mcp/sse") as mcp:
         result = await mcp.call_tool("search_movie", {
             "title": "Inception",
             "year": 2010
@@ -439,8 +487,13 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from mcp import Client
 import openai
 
-# Initialize MCP client
+# Initialize MCP client (choose transport mode)
+
+# Option 1: stdio transport (subprocess)
 mcp_client = Client("stdio://docker exec radarr-manager-mcp radarr-manager serve")
+
+# Option 2: HTTP/SSE transport (recommended for network services, v1.9.0+)
+mcp_client = Client("http://localhost:8091/mcp/sse")
 
 async def handle_voice(update: Update, context):
     """Handle voice messages - transcribe and process movie requests."""
@@ -573,7 +626,12 @@ from discord.ext import commands
 from mcp import Client
 
 bot = commands.Bot(command_prefix="!")
-mcp = Client("stdio://radarr-manager serve")
+
+# HTTP/SSE transport (recommended for network services, v1.9.0+)
+mcp = Client("http://localhost:8091/mcp/sse")
+
+# Or stdio transport (local/subprocess)
+# mcp = Client("stdio://radarr-manager serve")
 
 @bot.command()
 async def movie(ctx, *, query: str):
@@ -660,7 +718,12 @@ from mcp import Client
 import openai
 
 app = FastAPI()
-mcp = Client("stdio://radarr-manager serve")
+
+# HTTP/SSE transport (recommended for network services, v1.9.0+)
+mcp = Client("http://localhost:8091/mcp/sse")
+
+# Or stdio transport (local/subprocess)
+# mcp = Client("stdio://radarr-manager serve")
 
 class MovieRequest(BaseModel):
     query: str  # Natural language query
@@ -885,8 +948,9 @@ docker logs radarr-manager-mcp
 # Verify environment variables
 radarr-manager config
 
-# Test connection
-curl http://localhost:8080/health  # if HTTP endpoint exists
+# Test HTTP/SSE endpoints (v1.9.0+)
+curl -N http://localhost:8091/mcp/sse  # SSE stream
+# Should return SSE event stream
 ```
 
 ### Tool Calls Timeout
@@ -906,14 +970,22 @@ Check that OpenAI API key is configured:
 docker exec radarr-manager-mcp env | grep OPENAI
 ```
 
-### Connection Refused
+### Connection Refused (HTTP/SSE mode)
 
 ```bash
-# Check network mode
-docker inspect radarr-manager-mcp | grep NetworkMode
+# Check if HTTP/SSE server is running
+docker logs radarr-manager-mcp | grep "Starting MCP HTTP/SSE server"
 
-# Verify host binding
-netstat -tulpn | grep 8080
+# Verify port binding
+netstat -tulpn | grep 8091
+# Or on macOS:
+lsof -i :8091
+
+# Check Docker port mapping
+docker port radarr-manager-mcp
+
+# Test endpoints
+curl -N http://localhost:8091/mcp/sse
 ```
 
 ## Best Practices

@@ -5,8 +5,10 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 ## Features
 
 - 🎬 **Intelligent Movie Discovery**: Uses LLM providers (OpenAI) with web search for real-time box office trends
-- 🚀 **MCP Service Mode (v1.8.0)**: Run as MCP server for AI agent integration
+- 🚀 **MCP Service Mode (v1.8.0+)**: Run as MCP server for AI agent integration
   - Long-running service with structured tool API
+  - HTTP/SSE transport for network accessibility (v1.9.0+)
+  - ENV-based configuration (MCP_HOST, MCP_PORT, MCP_TRANSPORT)
   - Native integration for Telegram bots, Discord bots, web apps
   - 5 MCP tools: search_movie, add_movie, analyze_quality, discover_movies, sync_movies
   - Eliminates CLI overhead, maintains connection pooling
@@ -112,6 +114,11 @@ export RADARR_ROOT_FOLDER_PATH="/data/movies"
 export RADARR_MINIMUM_AVAILABILITY="announced"
 export RADARR_MONITOR=true
 export RADARR_TAGS="radarr-manager"
+
+# MCP Service Configuration (v1.9.0+)
+export MCP_HOST="127.0.0.1"
+export MCP_PORT=8091
+export MCP_TRANSPORT="stdio"  # or "sse" for HTTP/SSE transport
 ```
 
 ### Configuration Files
@@ -445,6 +452,20 @@ result = await mcp_client.call_tool("add_movie", {"title": title, "year": 2026})
 # Structured response, persistent service
 ```
 
+### Transport Modes (v1.9.0+)
+
+**stdio** (default): Process communication for local clients
+```bash
+radarr-manager serve  # stdio transport
+```
+
+**sse**: HTTP/SSE server for network-accessible service
+```bash
+radarr-manager serve --transport sse --host 0.0.0.0 --port 8091
+```
+
+Endpoints: `/mcp/sse` (SSE stream), `/mcp/messages` (POST)
+
 ### Available MCP Tools
 
 | Tool | Description | Use Case |
@@ -455,30 +476,50 @@ result = await mcp_client.call_tool("add_movie", {"title": title, "year": 2026})
 | `discover_movies` | Find blockbuster suggestions | "What's trending?" |
 | `sync_movies` | Discover and sync in one call | "Add top 10 movies" |
 
+### Environment Configuration (v1.9.0+)
+
+```bash
+# MCP Service Configuration
+MCP_HOST=127.0.0.1           # Bind host (default: 127.0.0.1)
+MCP_PORT=8091                # Bind port (default: 8091)
+MCP_TRANSPORT=sse            # Transport mode: stdio or sse (default: stdio)
+```
+
+CLI flags override ENV variables.
+
 ### Start MCP Server
 
 ```bash
-# Start MCP server (stdio transport for local clients)
+# Start with stdio transport (local clients)
 radarr-manager serve
 
+# Start with HTTP/SSE transport (network accessible)
+radarr-manager serve --transport sse --host 0.0.0.0 --port 8091
+
 # With debug logging
-radarr-manager serve --debug
+radarr-manager serve --transport sse --host 0.0.0.0 --debug
 ```
 
 ### Docker MCP Service
 
 ```bash
-# Run as long-running service
+# Run as long-running HTTP/SSE service
 docker run -d \
   --name radarr-manager-mcp \
   --env-file .env \
-  --network host \
-  -p 8080:8080 \
-  mlamp/radarr-manager:1.8.0 \
-  serve --host 0.0.0.0
+  -p 8091:8091 \
+  -e MCP_HOST=0.0.0.0 \
+  -e MCP_PORT=8091 \
+  -e MCP_TRANSPORT=sse \
+  mlamp/radarr-manager:latest \
+  serve --transport sse --host 0.0.0.0 --debug
 
 # Check logs
 docker logs -f radarr-manager-mcp
+
+# Connect to MCP endpoints
+# SSE stream: http://localhost:8091/mcp/sse
+# POST messages: http://localhost:8091/mcp/messages
 ```
 
 ### Python Client Example
