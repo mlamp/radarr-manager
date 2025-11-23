@@ -267,7 +267,7 @@ class TestBuildAddMoviePayload:
             "rootFolderPath": "/data/movies",
             "addOptions": {
                 "searchForMovie": False,
-                "monitor": True,
+                "monitor": "movieOnly",
             },
         }
 
@@ -287,7 +287,7 @@ class TestBuildAddMoviePayload:
 
         assert payload["minimumAvailability"] == "announced"
         assert payload["monitored"] is False
-        assert payload["addOptions"]["monitor"] == False
+        assert payload["addOptions"]["monitor"] == "none"
 
     def test_build_payload_with_numeric_tags(self):
         """Test building payload with numeric tags."""

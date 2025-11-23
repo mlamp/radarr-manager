@@ -8,8 +8,6 @@ from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
-from starlette.applications import Starlette
-from starlette.routing import Route
 
 from radarr_manager.clients.radarr import RadarrClient
 from radarr_manager.config.settings import Settings
@@ -581,28 +579,37 @@ async def run_mcp_server(settings: Settings) -> None:
 
 async def run_mcp_http_server(settings: Settings, host: str, port: int) -> None:
     """Run the MCP server with HTTP/SSE transport."""
-    from starlette.responses import Response
-
     server = create_mcp_server()
     sse = SseServerTransport("/mcp/messages")
 
-    async def handle_sse(request):
-        """Handle SSE connections."""
-        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-            await server.run(streams[0], streams[1], server.create_initialization_options())
+    async def app(scope, receive, send):
+        """Raw ASGI application for MCP SSE transport."""
+        if scope["type"] != "http":
+            return
 
-    async def handle_messages(request):
-        """Handle POST messages."""
-        await sse.handle_post_message(request.scope, request.receive, request._send)
+        path = scope["path"]
 
-    starlette_app = Starlette(
-        routes=[
-            Route("/mcp/sse", endpoint=handle_sse),
-            Route("/mcp/messages", endpoint=handle_messages, methods=["POST"]),
-        ]
-    )
+        if path == "/mcp/sse":
+            # Handle SSE endpoint
+            async with sse.connect_sse(scope, receive, send) as streams:
+                await server.run(streams[0], streams[1], server.create_initialization_options())
 
-    config = uvicorn.Config(starlette_app, host=host, port=port, log_level="info")
+        elif path == "/mcp/messages" and scope["method"] == "POST":
+            # Handle POST messages endpoint
+            await sse.handle_post_message(scope, receive, send)
+
+        else:
+            # 404 for other paths
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 404,
+                    "headers": [[b"content-type", b"text/plain"]],
+                }
+            )
+            await send({"type": "http.response.body", "body": b"Not Found"})
+
+    config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server_instance = uvicorn.Server(config)
     await server_instance.serve()
 
