@@ -581,17 +581,19 @@ async def run_mcp_server(settings: Settings) -> None:
 
 async def run_mcp_http_server(settings: Settings, host: str, port: int) -> None:
     """Run the MCP server with HTTP/SSE transport."""
+    from starlette.responses import Response
+
     server = create_mcp_server()
     sse = SseServerTransport("/mcp/messages")
 
-    async def handle_sse(scope, receive, send):
+    async def handle_sse(request):
         """Handle SSE connections."""
-        async with sse.connect_sse(scope, receive, send) as streams:
+        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
             await server.run(streams[0], streams[1], server.create_initialization_options())
 
-    async def handle_messages(scope, receive, send):
+    async def handle_messages(request):
         """Handle POST messages."""
-        await sse.handle_post_message(scope, receive, send)
+        await sse.handle_post_message(request.scope, request.receive, request._send)
 
     starlette_app = Starlette(
         routes=[
