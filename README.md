@@ -685,7 +685,7 @@ pytest
 
 ## Testing
 
-The project includes comprehensive test coverage with 119+ test cases across all core modules.
+The project includes comprehensive test coverage with 120+ test cases across all core modules, including unit tests, integration tests, and E2E MCP server tests.
 
 ### Running Tests
 
@@ -703,6 +703,13 @@ pytest --cov=src/radarr_manager --cov-report=term-missing
 pytest tests/clients/test_radarr.py -v
 pytest tests/services/test_sync.py -v
 pytest tests/providers/test_openai.py -v
+pytest tests/mcp/test_server.py -v
+
+# Run MCP E2E integration tests
+pytest tests/test_mcp_integration_e2e.py -v
+
+# Quick verification of RadarrClient methods
+python scripts/test_mcp_local.py
 ```
 
 ### Integration Tests
@@ -723,12 +730,15 @@ pytest -m "not integration"
 
 ### Test Structure
 
-- `tests/clients/` - HTTP client and API interaction tests
+- `tests/clients/` - HTTP client and API interaction tests (includes RadarrClient methods)
 - `tests/services/` - Business logic and sync service tests
 - `tests/providers/` - LLM provider and factory pattern tests
 - `tests/config/` - Configuration loading and validation tests
+- `tests/mcp/` - MCP server tool implementation tests
 - `tests/fixtures/` - Shared test data and API response mocks
 - `tests/test_integration.py` - End-to-end pipeline tests
+- `tests/test_mcp_integration_e2e.py` - E2E MCP server integration tests
+- `scripts/test_mcp_local.py` - Quick verification script for RadarrClient methods
 
 ### Writing Tests
 

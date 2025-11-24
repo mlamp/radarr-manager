@@ -44,6 +44,43 @@ class RadarrClient:
         response.raise_for_status()
         return response.json()
 
+    async def lookup_movie_by_tmdb(self, tmdb_id: int) -> list[dict[str, Any]]:
+        """Lookup movie by TMDB ID.
+
+        Args:
+            tmdb_id: The Movie Database ID
+
+        Returns:
+            List of movie results (usually 1 item)
+        """
+        return await self.lookup_movie(f"tmdb:{tmdb_id}")
+
+    async def lookup_movie_by_imdb(self, imdb_id: str) -> list[dict[str, Any]]:
+        """Lookup movie by IMDB ID.
+
+        Args:
+            imdb_id: IMDB ID (e.g., "tt0133093")
+
+        Returns:
+            List of movie results (usually 1 item)
+        """
+        return await self.lookup_movie(f"imdb:{imdb_id}")
+
+    async def get_movie_by_tmdb(self, tmdb_id: int) -> dict[str, Any] | None:
+        """Get movie from Radarr library by TMDB ID.
+
+        Args:
+            tmdb_id: The Movie Database ID
+
+        Returns:
+            Movie dictionary if found in library, None otherwise
+        """
+        movies = await self.list_movies()
+        for movie in movies:
+            if movie.get("tmdbId") == tmdb_id:
+                return movie
+        return None
+
     async def add_movie(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
         response = await self._client.post("/movie", json=payload)
         response.raise_for_status()

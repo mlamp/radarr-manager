@@ -375,6 +375,70 @@ class TestBuildAddMoviePayload:
         assert payload["titleSlug"] is None
         assert payload["year"] is None
 
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_lookup_movie_by_tmdb(self, client):
+        """Test lookup movie by TMDB ID."""
+        respx.get("http://localhost:7878/movie/lookup?term=tmdb%3A693134").mock(
+            return_value=httpx.Response(200, json=MOVIE_LOOKUP_RESPONSE)
+        )
+
+        results = await client.lookup_movie_by_tmdb(693134)
+
+        assert isinstance(results, list)
+        assert len(results) > 0
+        assert results[0]["tmdbId"] == 693134
+        assert results[0]["title"] == "Dune: Part Two"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_lookup_movie_by_imdb(self, client):
+        """Test lookup movie by IMDB ID."""
+        respx.get("http://localhost:7878/movie/lookup?term=imdb%3Att15239678").mock(
+            return_value=httpx.Response(200, json=MOVIE_LOOKUP_RESPONSE)
+        )
+
+        results = await client.lookup_movie_by_imdb("tt15239678")
+
+        assert isinstance(results, list)
+        assert len(results) > 0
+        assert results[0]["imdbId"] == "tt15239678"
+        assert results[0]["title"] == "Dune: Part Two"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_get_movie_by_tmdb_found(self, client):
+        """Test getting movie from library by TMDB ID - movie exists."""
+        respx.get("http://localhost:7878/movie").mock(
+            return_value=httpx.Response(200, json=MOVIE_LIST_RESPONSE)
+        )
+
+        movie = await client.get_movie_by_tmdb(603)
+
+        assert movie is not None
+        assert movie["tmdbId"] == 603
+        assert movie["title"] == "The Matrix"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_get_movie_by_tmdb_not_found(self, client):
+        """Test getting movie from library by TMDB ID - movie doesn't exist."""
+        respx.get("http://localhost:7878/movie").mock(
+            return_value=httpx.Response(200, json=MOVIE_LIST_RESPONSE)
+        )
+
+        movie = await client.get_movie_by_tmdb(999999)  # Non-existent
+
+        assert movie is None
+
+        await client.close()
+
 
 @pytest.mark.integration
 class TestRadarrClientIntegration:
