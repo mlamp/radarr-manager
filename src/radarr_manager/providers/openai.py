@@ -149,9 +149,10 @@ class OpenAIProvider(MovieDiscoveryProvider):
     def _build_prompt(self, *, limit: int, region: str) -> str:
         timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         return (
-            "Use web_search to find movies from these Rotten Tomatoes sources: "
+            "Use web_search to find movies from these sources: "
             "(1) https://www.rottentomatoes.com/browse/movies_in_theaters - currently in theaters, "
-            "(2) https://www.rottentomatoes.com/browse/movies_at_home/sort:popular - trending streaming/home releases. "
+            "(2) https://www.rottentomatoes.com/browse/movies_at_home/sort:popular - trending streaming/home releases, "
+            "(3) https://www.imdb.com/chart/moviemeter/ - IMDb most popular movies right now. "
             "Also search IMDb release calendars and movie news sites. "
             "Include theatrical releases, blockbusters, franchise films, prestige films, AND high-quality streaming releases. "
             "PRIORITIZE movies featuring Academy Award winners/nominees. "

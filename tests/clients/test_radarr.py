@@ -267,7 +267,7 @@ class TestBuildAddMoviePayload:
             "monitored": True,
             "rootFolderPath": "/data/movies",
             "addOptions": {
-                "searchForMovie": False,
+                "searchForMovie": True,
                 "monitor": "movieOnly",
             },
         }
