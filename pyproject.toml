@@ -1,6 +1,6 @@
 [project]
 name = "radarr-manager"
-version = "1.10.5"
+version = "1.10.6"
 description = "CLI helpers for discovering and managing blockbuster movie lists in Radarr."
 readme = "README.md"
 requires-python = ">=3.12"
