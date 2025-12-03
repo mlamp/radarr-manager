@@ -15,15 +15,13 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "You are a film research assistant. Always return a single JSON object with a 'suggestions' array. "
-    "Each element MUST include: title, optional release_date (YYYY-MM-DD), overview, franchise, confidence (0-1), "
-    "sources (array of URLs or outlet names), and MANDATORY metadata object with comprehensive ratings data. "
-    "CRITICAL: For EVERY movie suggestion, you MUST search for and include in the metadata object: "
-    "- tmdb_id (numeric TMDB ID), imdb_id (string like tt1234567), imdb_rating (numeric, e.g. 7.3), imdb_votes (integer) "
-    "- rt_critics_score (Rotten Tomatoes critics %, 0-100), rt_audience_score (RT audience %, 0-100) "
-    "- metacritic_score (Metacritic score, 0-100, null if unavailable) "
-    "Use web_search to find current ratings from IMDb, Rotten Tomatoes, and Metacritic. "
-    'Example format: {"title": "Movie Title", "metadata": {"tmdb_id": 12345, "imdb_id": "tt1234567", "imdb_rating": 7.3, '
-    '"imdb_votes": 45000, "rt_critics_score": 85, "rt_audience_score": 92, "metacritic_score": 78}, ...} '
+    "Each element MUST include: title, release_date (YYYY-MM-DD or null), overview (brief plot summary), "
+    "franchise (franchise name or null), confidence (0-1 based on how well it matches criteria), "
+    "sources (array of outlet names where you found info). "
+    "NOTE: Do NOT include ratings/metadata - ratings will be fetched separately from authoritative sources. "
+    'Example format: {"suggestions": [{"title": "Movie Title", "release_date": "2025-08-15", '
+    '"overview": "Brief plot description...", "franchise": "Franchise Name", "confidence": 0.9, '
+    '"sources": ["IMDb", "Wikipedia"]}]} '
     "Focus on major film releases from the past three months or the next four months that have strong commercial momentum. "
     "Include: blockbusters, franchises (Marvel, DC, Disney, Universal, Warner Bros), prestige films (Lionsgate, A24, Sony Pictures, "
     "Neon, Searchlight, Focus Features, Aura Entertainment, IFC, Bleecker Street), AND well-reviewed mid-budget theatrical releases "
@@ -36,8 +34,8 @@ SYSTEM_PROMPT = (
     "Examples of Best Actress winners to prioritize: Michelle Yeoh, Jessica Chastain, Frances McDormand, Olivia Colman, Emma Stone, "
     "Brie Larson, Julianne Moore, Cate Blanchett, Jennifer Lawrence, Natalie Portman, Sandra Bullock, Kate Winslet, Marion Cotillard, "
     "Helen Mirren, Reese Witherspoon, Charlize Theron, Nicole Kidman, Halle Berry, Julia Roberts, Gwyneth Paltrow. "
-    "QUALITY REQUIREMENTS: For released movies, exclude those with IMDb ratings below 6.5/10. "
-    "For PRE-RELEASE movies (no IMDb rating yet), include them if they meet ANY of these criteria: "
+    "QUALITY REQUIREMENTS: For released movies, only suggest those with IMDb 6.5+/10 or RT 60%+. "
+    "For PRE-RELEASE movies (no ratings yet), include them if they meet ANY of these criteria: "
     "(1) Major studio tentpole/franchise film, (2) A-list cast or acclaimed director, (3) Strong marketing buzz or trailer views, "
     "(4) Based on bestselling book/successful IP, (5) Award season contender, (6) Wide theatrical release confirmed. "
     "EXCLUDE low-budget regional films, direct-to-streaming B-movies, and poorly received sequels. "
@@ -133,12 +131,10 @@ class OpenAIProvider(MovieDiscoveryProvider):
                 f"[DEBUG] Validated {len(suggestions)} suggestions, returning {len(truncated)}"
             )
             for idx, s in enumerate(truncated, 1):
-                imdb_rating = "N/A"
-                if s.metadata and "imdb_rating" in s.metadata:
-                    imdb_rating = s.metadata["imdb_rating"]
+                franchise_info = f" [{s.franchise}]" if s.franchise else ""
                 logger.info(
-                    f"[DEBUG]   {idx}. {s.title} ({s.year or 'TBA'}) "
-                    f"- confidence: {s.confidence:.2f}, IMDb: {imdb_rating}"
+                    f"[DEBUG]   {idx}. {s.title} ({s.year or 'TBA'}){franchise_info} "
+                    f"- confidence: {s.confidence:.2f}"
                 )
 
             if len(suggestions) > limit:
