@@ -38,6 +38,15 @@ class Settings(BaseModel):
     mcp_port: int = Field(default=8091, alias="MCP_PORT")
     mcp_transport: str = Field(default="stdio", alias="MCP_TRANSPORT")
 
+    # Scraper Configuration (for hybrid discovery mode)
+    scraper_enabled: bool = Field(default=False, alias="SCRAPER_ENABLED")
+    scraper_provider: str = Field(default="firecrawl", alias="SCRAPER_PROVIDER")
+    firecrawl_api_url: str = Field(
+        default="http://localhost:3002", alias="FIRECRAWL_API_URL"
+    )
+    firecrawl_api_key: str | None = Field(default=None, alias="FIRECRAWL_API_KEY")
+    discovery_mode: str = Field(default="openai", alias="DISCOVERY_MODE")
+
     model_config = {
         "populate_by_name": True,
         "str_strip_whitespace": True,
@@ -167,6 +176,11 @@ def _collect_env_overrides() -> dict[str, Any]:
         "MCP_HOST": "mcp_host",
         "MCP_PORT": "mcp_port",
         "MCP_TRANSPORT": "mcp_transport",
+        "SCRAPER_ENABLED": "scraper_enabled",
+        "SCRAPER_PROVIDER": "scraper_provider",
+        "FIRECRAWL_API_URL": "firecrawl_api_url",
+        "FIRECRAWL_API_KEY": "firecrawl_api_key",
+        "DISCOVERY_MODE": "discovery_mode",
     }
 
     result: dict[str, Any] = {}
@@ -176,7 +190,7 @@ def _collect_env_overrides() -> dict[str, Any]:
         value = os.environ[env_name]
         if field in {"quality_profile_id", "cache_ttl_hours", "mcp_port"}:
             result[field] = int(value)
-        elif field == "monitor":
+        elif field in {"monitor", "scraper_enabled"}:
             result[field] = value.lower() not in {"false", "0", "no"}
         elif field == "tags":
             result[field] = [item.strip() for item in value.split(",") if item.strip()]

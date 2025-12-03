@@ -37,7 +37,11 @@ def discover(
     limit: int = typer.Option(5, help="Maximum number of movies to return."),
     provider: str | None = typer.Option(
         None,
-        help="Override the configured discovery provider (e.g. openai, gemini).",
+        help="[Deprecated] Use --discovery-mode instead.",
+    ),
+    discovery_mode: str | None = typer.Option(
+        None,
+        help="Discovery mode: openai, hybrid, scraper, or static.",
     ),
     debug: bool = typer.Option(
         False, help="Enable debug logging to see detailed discovery process."
@@ -51,7 +55,9 @@ def discover(
     if load_result is None:
         raise typer.Exit(code=1)
 
-    provider_instance = _safe_build_provider(load_result.settings, provider, debug=debug)
+    # Prefer discovery_mode, fall back to deprecated provider arg
+    mode_override = discovery_mode or provider
+    provider_instance = _safe_build_provider(load_result.settings, mode_override, debug=debug)
     if provider_instance is None:
         raise typer.Exit(code=1)
 
@@ -76,6 +82,10 @@ def sync(
             "validation and red flag detection."
         ),
     ),
+    discovery_mode: str | None = typer.Option(
+        None,
+        help="Discovery mode: openai, hybrid, scraper, or static.",
+    ),
     debug: bool = typer.Option(
         False, help="Enable debug logging to see detailed discovery process."
     ),
@@ -95,7 +105,7 @@ def sync(
         typer.secho(str(exc), fg=typer.colors.RED)
         raise typer.Exit(code=1) from exc
 
-    provider_instance = _safe_build_provider(settings, None, debug=debug)
+    provider_instance = _safe_build_provider(settings, discovery_mode, debug=debug)
     if provider_instance is None:
         raise typer.Exit(code=1)
 
