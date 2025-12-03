@@ -40,11 +40,11 @@ class Settings(BaseModel):
 
     # Scraper Configuration (for hybrid discovery mode)
     scraper_enabled: bool = Field(default=False, alias="SCRAPER_ENABLED")
-    scraper_provider: str = Field(default="firecrawl", alias="SCRAPER_PROVIDER")
-    firecrawl_api_url: str = Field(
-        default="http://localhost:3002", alias="FIRECRAWL_API_URL"
+    scraper_provider: str = Field(default="crawl4ai", alias="SCRAPER_PROVIDER")
+    scraper_api_url: str = Field(
+        default="http://localhost:11235", alias="SCRAPER_API_URL"
     )
-    firecrawl_api_key: str | None = Field(default=None, alias="FIRECRAWL_API_KEY")
+    scraper_api_key: str | None = Field(default=None, alias="SCRAPER_API_KEY")
     discovery_mode: str = Field(default="openai", alias="DISCOVERY_MODE")
 
     model_config = {
@@ -178,8 +178,8 @@ def _collect_env_overrides() -> dict[str, Any]:
         "MCP_TRANSPORT": "mcp_transport",
         "SCRAPER_ENABLED": "scraper_enabled",
         "SCRAPER_PROVIDER": "scraper_provider",
-        "FIRECRAWL_API_URL": "firecrawl_api_url",
-        "FIRECRAWL_API_KEY": "firecrawl_api_key",
+        "SCRAPER_API_URL": "scraper_api_url",
+        "SCRAPER_API_KEY": "scraper_api_key",
         "DISCOVERY_MODE": "discovery_mode",
     }
 

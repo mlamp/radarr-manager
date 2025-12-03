@@ -1,37 +1,37 @@
-# Development docker-compose for running Firecrawl locally
+# Development docker-compose for running Crawl4AI locally
 # Usage: docker-compose -f docker-compose.dev.yml up -d
 #
-# This provides a local Firecrawl instance for movie discovery scraping.
+# This provides a local Crawl4AI instance for movie discovery scraping.
 # The scraper extracts movie titles from RT and IMDB pages reliably.
+#
+# Crawl4AI Dashboard: http://localhost:11235/dashboard
+# Crawl4AI Playground: http://localhost:11235/playground
 
 services:
-  firecrawl:
-    image: mendableai/firecrawl:latest
-    container_name: firecrawl
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: crawl4ai
     ports:
-      - "3002:3002"
+      - "11235:11235"
     environment:
-      - PORT=3002
-      - HOST=0.0.0.0
-      # No API key required for local/self-hosted usage
-      # Set FIRECRAWL_API_KEY if you want to require auth
+      - CRAWL4AI_API_TOKEN=  # Optional: set for API authentication
+    shm_size: 1g  # Required for browser rendering
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
-  # Optional: Redis for Firecrawl caching (improves performance)
-  redis:
-    image: redis:7-alpine
-    container_name: firecrawl-redis
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    volumes:
-      - redis-data:/data
-
-volumes:
-  redis-data:
+  # Alternative: Firecrawl (if you prefer it over Crawl4AI)
+  # Uncomment to use Firecrawl instead
+  # firecrawl:
+  #   image: mendableai/firecrawl:latest
+  #   container_name: firecrawl
+  #   ports:
+  #     - "3002:3002"
+  #   environment:
+  #     - PORT=3002
+  #     - HOST=0.0.0.0
+  #   restart: unless-stopped

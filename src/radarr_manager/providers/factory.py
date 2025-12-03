@@ -45,8 +45,8 @@ def _build_hybrid_provider(settings: Settings, debug: bool) -> HybridDiscoveryPr
     """Build hybrid provider with scraper + OpenAI."""
     scraper = build_scraper(
         provider=settings.scraper_provider,
-        api_url=settings.firecrawl_api_url,
-        api_key=settings.firecrawl_api_key,
+        api_url=settings.scraper_api_url,
+        api_key=settings.scraper_api_key,
         debug=debug,
     )
 
@@ -73,8 +73,8 @@ def _build_scraper_only_provider(
     """Build scraper-only provider (no OpenAI)."""
     scraper = build_scraper(
         provider=settings.scraper_provider,
-        api_url=settings.firecrawl_api_url,
-        api_key=settings.firecrawl_api_key,
+        api_url=settings.scraper_api_url,
+        api_key=settings.scraper_api_key,
         debug=debug,
     )
 
