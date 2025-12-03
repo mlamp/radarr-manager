@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -98,6 +99,7 @@ class OpenAIProvider(MovieDiscoveryProvider):
                 ],
                 tools=[{"type": "web_search"}],
                 temperature=0.3,
+                max_output_tokens=4096,
             )
         except Exception as exc:  # pragma: no cover - depends on network APIs
             raise ProviderError(f"OpenAI request failed: {exc}") from exc
@@ -178,6 +180,9 @@ class OpenAIProvider(MovieDiscoveryProvider):
                 text = getattr(content, "text", None)
                 if text:
                     candidate = text.strip()
+                    # Remove OpenAI citation markers like 【4:0†source】 or [citation]
+                    candidate = re.sub(r"【[^】]*】", "", candidate)
+                    candidate = re.sub(r"\[citation[^\]]*\]", "", candidate, flags=re.IGNORECASE)
                     if not candidate.startswith("{"):
                         start = candidate.find("{")
                         end = candidate.rfind("}")

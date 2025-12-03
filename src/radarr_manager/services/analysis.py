@@ -96,7 +96,7 @@ class DeepAnalysisService:
         flags = []
 
         imdb_rating = metadata.get("imdb_rating")
-        imdb_votes = metadata.get("imdb_votes", 0)
+        imdb_votes = metadata.get("imdb_votes") or 0  # Handle None explicitly
         rt_critics = metadata.get("rt_critics_score")
         rt_audience = metadata.get("rt_audience_score")
         metacritic = metadata.get("metacritic_score")
@@ -137,7 +137,7 @@ class DeepAnalysisService:
         strengths = []
 
         imdb_rating = metadata.get("imdb_rating")
-        imdb_votes = metadata.get("imdb_votes", 0)
+        imdb_votes = metadata.get("imdb_votes") or 0  # Handle None explicitly
         rt_critics = metadata.get("rt_critics_score")
         rt_audience = metadata.get("rt_audience_score")
         metacritic = metadata.get("metacritic_score")
@@ -192,7 +192,7 @@ class DeepAnalysisService:
         scores = []
 
         imdb_rating = metadata.get("imdb_rating")
-        imdb_votes = metadata.get("imdb_votes", 0)
+        imdb_votes = metadata.get("imdb_votes") or 0  # Handle None explicitly
         rt_critics = metadata.get("rt_critics_score")
         rt_audience = metadata.get("rt_audience_score")
         metacritic = metadata.get("metacritic_score")
