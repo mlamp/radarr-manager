@@ -149,10 +149,12 @@ class OpenAIProvider(MovieDiscoveryProvider):
     def _build_prompt(self, *, limit: int, region: str) -> str:
         timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         return (
-            "Use web_search to find upcoming and recent wide theatrical movies. Search movie news sites, "
-            "IMDb release calendars, and Rotten Tomatoes (https://www.rottentomatoes.com/browse/movies_in_theaters). "
-            "Focus on 2025 theatrical releases, blockbusters, franchise films, prestige films, and quality "
-            "mid-budget releases. PRIORITIZE movies featuring Academy Award-winning actors. "
+            "Use web_search to find movies from these Rotten Tomatoes sources: "
+            "(1) https://www.rottentomatoes.com/browse/movies_in_theaters - currently in theaters, "
+            "(2) https://www.rottentomatoes.com/browse/movies_at_home/sort:popular - trending streaming/home releases. "
+            "Also search IMDb release calendars and movie news sites. "
+            "Include theatrical releases, blockbusters, franchise films, prestige films, AND high-quality streaming releases. "
+            "PRIORITIZE movies featuring Academy Award winners/nominees. "
             "Return ONLY: title, release_date, overview, franchise (if applicable), confidence, and sources. "
             f"Do NOT include any ratings or IDs - those will be fetched separately. "
             f"{timestamp}. Find up to {limit} movies for region {region}."
