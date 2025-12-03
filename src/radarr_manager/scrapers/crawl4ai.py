@@ -91,7 +91,15 @@ class Crawl4AIScraper(ScraperProvider):
         # Extract markdown content from Crawl4AI response
         if data.get("success") and data.get("results"):
             result = data["results"][0]
-            return result.get("markdown", "") or result.get("html", "")
+            # Handle both old (string) and new (dict) markdown formats
+            markdown = result.get("markdown")
+            if isinstance(markdown, dict):
+                # New format: markdown is a dict with raw_markdown, fit_markdown, etc.
+                return markdown.get("raw_markdown", "") or markdown.get("fit_markdown", "")
+            elif isinstance(markdown, str):
+                return markdown
+            else:
+                return result.get("html", "")
         else:
             error_msg = data.get("error", "Unknown error")
             raise ScraperError(f"Crawl4AI request failed: {error_msg}")
@@ -101,70 +109,84 @@ class Crawl4AIScraper(ScraperProvider):
         movies: list[ScrapedMovie] = []
         seen_titles: set[str] = set()
 
-        lines = content.split("\n")
+        # Pattern 1: Movie links with ratings and dates
+        # Format: [ XX% YY% Title Opened/Opens Month DD, YYYY ](url/m/...)
+        # or: [ XX% Title Opened/Opens Month DD, YYYY ](url/m/...)
+        movie_link_pattern = re.compile(
+            r"\[\s*(?:\d+%\s*)?(?:\d+%\s*)?"  # Optional ratings (XX% YY%)
+            r"([A-Z][^[\]]{2,80}?)"  # Title (starts with capital)
+            r"\s+(?:Opened?|Opens)\s+"  # Opened/Opens
+            r"[A-Z][a-z]{2}\s+\d{1,2},\s+(\d{4})"  # Month DD, YYYY
+            r"\s*\]\s*\(https?://www\.rottentomatoes\.com/m/",
+            re.IGNORECASE,
+        )
 
-        for line in lines:
-            line = line.strip()
-            if not line or len(line) < 3:
-                continue
+        for match in movie_link_pattern.finditer(content):
+            title = match.group(1).strip()
+            year = int(match.group(2))
+            title = self._clean_title(title)
 
-            # Skip navigation/menu items
-            skip_keywords = [
-                "sign in",
-                "menu",
-                "search",
-                "home",
-                "movies",
-                "tv shows",
-                "more",
-                "what to watch",
-                "rotten tomatoes",
-                "certified fresh",
-                "audience score",
-                "tomatometer",
-                "see all",
-                "view all",
-                "critics consensus",
-                "read more",
-                "buy tickets",
-                "where to watch",
-            ]
-            if any(skip in line.lower() for skip in skip_keywords):
-                continue
-
-            # Try markdown link pattern [Title](url) - common in Crawl4AI output
-            link_match = re.search(r"\[([^\]]{3,60})\]\(/m/[a-z0-9_-]+\)", line)
-            if link_match:
-                title = link_match.group(1).strip()
-                title = self._clean_title(title)
-                if self._is_valid_title(title) and title.lower() not in seen_titles:
-                    seen_titles.add(title.lower())
-                    movies.append(
-                        ScrapedMovie(
-                            title=title,
-                            source="rt",
-                            url=url,
-                        )
+            if self._is_valid_title(title) and title.lower() not in seen_titles:
+                seen_titles.add(title.lower())
+                movies.append(
+                    ScrapedMovie(
+                        title=title,
+                        year=year,
+                        source="rt",
+                        url=url,
                     )
-                continue
+                )
 
-            # Try to extract "Title (Year)" pattern
-            match = re.search(r"^([A-Z][^(\[\]]{2,55}?)\s*\((\d{4})\)", line)
-            if match:
-                title = match.group(1).strip()
-                year = int(match.group(2))
-                title = self._clean_title(title)
+        # Pattern 2: Certified fresh picks format
+        # Format: [ XX% Title Link to Title ](url/m/...)
+        cert_fresh_pattern = re.compile(
+            r"\[\s*\d+%\s+"  # Rating XX%
+            r"([A-Z][^[\]]{2,60}?)"  # Title
+            r"\s+Link to\s+"  # "Link to"
+            r"[^[\]]+\s*\]"  # Rest of link text
+            r"\s*\(https?://www\.rottentomatoes\.com/m/",
+        )
 
-                if self._is_valid_title(title) and title.lower() not in seen_titles:
-                    seen_titles.add(title.lower())
-                    movies.append(
-                        ScrapedMovie(
-                            title=title,
-                            year=year,
-                            source="rt",
-                            url=url,
-                        )
+        for match in cert_fresh_pattern.finditer(content):
+            title = match.group(1).strip()
+            title = self._clean_title(title)
+
+            if self._is_valid_title(title) and title.lower() not in seen_titles:
+                seen_titles.add(title.lower())
+                movies.append(
+                    ScrapedMovie(
+                        title=title,
+                        source="rt",
+                        url=url,
                     )
+                )
+
+        # Pattern 3: Simple watchlist format
+        # Format: [ XX% Title Opened/Opens Month DD, YYYY ](url) Watchlist
+        watchlist_pattern = re.compile(
+            r"\[\s*(?:\d+%\s*)?"  # Optional rating
+            r"([A-Z][^[\]]{2,60}?)"  # Title
+            r"\s+(?:Opened?|Opens)\s+"
+            r"[A-Z][a-z]{2}\s+\d{1,2},\s+(\d{4})"
+            r"\s*\]\s*\([^)]+\)\s*Watchlist",
+            re.IGNORECASE,
+        )
+
+        for match in watchlist_pattern.finditer(content):
+            title = match.group(1).strip()
+            year = int(match.group(2))
+            title = self._clean_title(title)
+
+            if self._is_valid_title(title) and title.lower() not in seen_titles:
+                seen_titles.add(title.lower())
+                movies.append(
+                    ScrapedMovie(
+                        title=title,
+                        year=year,
+                        source="rt",
+                        url=url,
+                    )
+                )
 
         return movies
 
@@ -173,16 +195,19 @@ class Crawl4AIScraper(ScraperProvider):
         movies: list[ScrapedMovie] = []
         seen_titles: set[str] = set()
 
-        # IMDB moviemeter format: "1. Movie Title (2024)" or table format
-        imdb_pattern = re.compile(r"(\d+)\.\s*([^(\n\[\]]{2,60}?)\s*\((\d{4})\)")
+        # Primary pattern: Markdown headers with IMDB links
+        # Format: ### [Title](https://www.imdb.com/title/ttXXXXXXX/?ref_=chtmvm_t_N)
+        header_pattern = re.compile(
+            r"###\s*\[([^\]]{2,80})\]"  # ### [Title]
+            r"\(https?://www\.imdb\.com/title/tt\d+/\?ref_=chtmvm_t_(\d+)\)",  # (url with rank)
+        )
 
-        for match in imdb_pattern.finditer(content):
-            rank = int(match.group(1))
-            title = match.group(2).strip()
-            year = int(match.group(3))
+        for match in header_pattern.finditer(content):
+            title = match.group(1).strip()
+            rank = int(match.group(2))
             title = self._clean_title(title)
 
-            # Only take top movies
+            # Only take top 100 movies
             if (
                 rank <= 100
                 and self._is_valid_title(title)
@@ -192,27 +217,29 @@ class Crawl4AIScraper(ScraperProvider):
                 movies.append(
                     ScrapedMovie(
                         title=title,
-                        year=year,
                         source="imdb",
                         url=url,
                         extra={"rank": rank},
                     )
                 )
 
-        # Also try markdown link patterns
-        link_pattern = re.compile(r"\[([^\]]{3,60})\]\(/title/tt\d+")
-        for match in link_pattern.finditer(content):
-            title = match.group(1).strip()
-            title = self._clean_title(title)
-            if self._is_valid_title(title) and title.lower() not in seen_titles:
-                seen_titles.add(title.lower())
-                movies.append(
-                    ScrapedMovie(
-                        title=title,
-                        source="imdb",
-                        url=url,
+        # Fallback pattern: Simple markdown links to IMDB titles
+        if not movies:
+            link_pattern = re.compile(
+                r"\[([^\]]{3,80})\]\(https?://www\.imdb\.com/title/tt\d+"
+            )
+            for match in link_pattern.finditer(content):
+                title = match.group(1).strip()
+                title = self._clean_title(title)
+                if self._is_valid_title(title) and title.lower() not in seen_titles:
+                    seen_titles.add(title.lower())
+                    movies.append(
+                        ScrapedMovie(
+                            title=title,
+                            source="imdb",
+                            url=url,
+                        )
                     )
-                )
 
         return movies
 

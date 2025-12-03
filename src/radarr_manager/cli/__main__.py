@@ -41,7 +41,7 @@ def discover(
     ),
     discovery_mode: str | None = typer.Option(
         None,
-        help="Discovery mode: openai, hybrid, scraper, or static.",
+        help="Discovery mode: openai, hybrid, scraper, agentic, smart_agentic, or static.",
     ),
     debug: bool = typer.Option(
         False, help="Enable debug logging to see detailed discovery process."
@@ -84,7 +84,7 @@ def sync(
     ),
     discovery_mode: str | None = typer.Option(
         None,
-        help="Discovery mode: openai, hybrid, scraper, or static.",
+        help="Discovery mode: openai, hybrid, scraper, agentic, smart_agentic, or static.",
     ),
     debug: bool = typer.Option(
         False, help="Enable debug logging to see detailed discovery process."

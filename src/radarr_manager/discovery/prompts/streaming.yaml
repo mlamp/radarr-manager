@@ -1,0 +1,33 @@
+# Streaming-focused discovery prompt
+name: streaming
+description: Focus on movies available for streaming at home
+
+variables:
+  region: US
+  year: 2025
+
+sources:
+  # Rotten Tomatoes - Movies at Home
+  - type: scrape
+    url: https://www.rottentomatoes.com/browse/movies_at_home/sort:popular
+    parser: rt_home
+    priority: 1
+
+  # Rotten Tomatoes - Certified Fresh at Home
+  - type: scrape
+    url: https://www.rottentomatoes.com/browse/movies_at_home/critics:certified_fresh~sort:popular
+    parser: rt_home
+    priority: 2
+
+  # Streaming search
+  - type: web_search
+    query: "best new streaming movies {region} {year} netflix prime video"
+    priority: 3
+
+llm_enhancement:
+  enabled: true
+  add_descriptions: true
+  validate_availability: false
+
+fallback_to_web_search: true
+limit: 30

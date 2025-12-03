@@ -1,0 +1,44 @@
+# Comprehensive discovery prompt - all sources
+name: comprehensive
+description: Comprehensive discovery from all available sources
+
+variables:
+  region: US
+  year: 2025
+
+sources:
+  # Rotten Tomatoes - Theaters
+  - type: scrape
+    url: https://www.rottentomatoes.com/browse/movies_in_theaters/sort:popular
+    parser: rt_theaters
+    priority: 1
+
+  # Rotten Tomatoes - Streaming
+  - type: scrape
+    url: https://www.rottentomatoes.com/browse/movies_at_home/sort:popular
+    parser: rt_home
+    priority: 2
+
+  # IMDB Moviemeter - dynamically sized
+  - type: scrape
+    url: https://www.imdb.com/search/title/?title_type=feature&moviemeter=1,{fetch_limit}&count={fetch_limit}
+    parser: imdb_meter
+    priority: 3
+
+  # Box office
+  - type: web_search
+    query: "box office top movies {region} {year}"
+    priority: 4
+
+  # Upcoming releases
+  - type: web_search
+    query: "upcoming movie releases {region} {year}"
+    priority: 5
+
+llm_enhancement:
+  enabled: true
+  add_descriptions: true
+  validate_availability: true
+
+fallback_to_web_search: true
+limit: 100

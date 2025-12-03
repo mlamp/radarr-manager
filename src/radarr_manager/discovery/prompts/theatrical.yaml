@@ -1,0 +1,42 @@
+# Theatrical-focused discovery prompt
+name: theatrical
+description: Focus on movies currently in theaters
+
+variables:
+  region: US
+  year: 2025
+
+sources:
+  # Rotten Tomatoes - Movies in Theaters (popular)
+  - type: scrape
+    url: https://www.rottentomatoes.com/browse/movies_in_theaters/sort:popular
+    parser: rt_theaters
+    priority: 1
+
+  # Rotten Tomatoes - Certified Fresh in Theaters
+  - type: scrape
+    url: https://www.rottentomatoes.com/browse/movies_in_theaters/critics:certified_fresh~sort:popular
+    parser: rt_theaters
+    priority: 2
+
+  # IMDB Moviemeter - dynamically sized
+  - type: scrape
+    url: https://www.imdb.com/search/title/?title_type=feature&moviemeter=1,{fetch_limit}&count={fetch_limit}
+    parser: imdb_meter
+    priority: 3
+
+  # Box office search
+  - type: web_search
+    query: "current box office top 10 movies {region} {year}"
+    priority: 4
+
+llm_enhancement:
+  enabled: true
+  add_descriptions: true
+  validate_availability: true
+  prompt: |
+    For each movie, confirm it is currently playing in {region} theaters.
+    Add a brief plot summary if missing.
+
+fallback_to_web_search: true
+limit: 30

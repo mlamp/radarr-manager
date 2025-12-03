@@ -1,0 +1,33 @@
+# Default discovery prompt - theatrical releases
+name: default
+description: Discover trending theatrical releases and popular movies
+
+variables:
+  region: US
+  year: 2025
+
+sources:
+  # Rotten Tomatoes - Movies in Theaters
+  - type: scrape
+    url: https://www.rottentomatoes.com/browse/movies_in_theaters/sort:popular
+    parser: rt_theaters
+    priority: 1
+
+  # IMDB Moviemeter - dynamically sized based on limit
+  - type: scrape
+    url: https://www.imdb.com/search/title/?title_type=feature&moviemeter=1,{fetch_limit}&count={fetch_limit}
+    parser: imdb_meter
+    priority: 2
+
+  # LLM web search for additional coverage
+  - type: web_search
+    query: "top box office movies {region} {year} currently in theaters"
+    priority: 3
+
+llm_enhancement:
+  enabled: true
+  add_descriptions: true
+  validate_availability: true
+
+fallback_to_web_search: true
+limit: 50

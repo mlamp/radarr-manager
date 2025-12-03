@@ -5,6 +5,10 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 ## Features
 
 - 🎬 **Intelligent Movie Discovery**: Uses LLM providers (OpenAI) with web search for real-time box office trends
+- 🕷️ **Hybrid Discovery Mode (v1.11.0+)**: Combines web scraping with LLM for reliable, comprehensive discovery
+  - Scrapes Rotten Tomatoes (theaters + streaming) and IMDB moviemeter
+  - Supports Crawl4AI (default) or Firecrawl as scraping backends
+  - Merges scraped titles with OpenAI suggestions for best coverage
 - 🚀 **MCP Service Mode (v1.8.0+)**: Run as MCP server for AI agent integration
   - Long-running service with structured tool API
   - HTTP/SSE transport for network accessibility (v1.9.0+)
@@ -34,7 +38,8 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 
 - Python 3.12+
 - A running Radarr instance
-- OpenAI API key (for movie discovery)
+- OpenAI API key (for movie discovery in `openai` or `hybrid` mode)
+- Crawl4AI or Firecrawl service (optional, for `hybrid` or `scraper` mode)
 
 ## Installation
 
@@ -119,6 +124,14 @@ export RADARR_TAGS="radarr-manager"
 export MCP_HOST="127.0.0.1"
 export MCP_PORT=8091
 export MCP_TRANSPORT="stdio"  # or "sse" for HTTP/SSE transport
+
+# Discovery Mode (v1.11.0+)
+export DISCOVERY_MODE="openai"  # openai, hybrid, or scraper
+
+# Scraper Configuration (for hybrid/scraper modes)
+export SCRAPER_PROVIDER="crawl4ai"  # crawl4ai or firecrawl
+export SCRAPER_API_URL="http://localhost:11235"  # Crawl4AI default
+export SCRAPER_API_KEY=""  # Optional API key
 ```
 
 ### Configuration Files
@@ -171,10 +184,18 @@ Discover trending movies without modifying Radarr:
 radarr-manager discover [OPTIONS]
 
 Options:
-  --limit INTEGER     Maximum number of movies to return (default: 5)
-  --provider TEXT     Override provider (openai, static)
-  --help             Show this message and exit
+  --limit INTEGER          Maximum number of movies to return (default: 5)
+  --provider TEXT          Override provider (openai, static)
+  --discovery-mode TEXT    Discovery mode: openai, hybrid, scraper, or static (v1.11.0+)
+  --debug                  Show detailed discovery output
+  --help                   Show this message and exit
 ```
+
+**Discovery Modes (v1.11.0+):**
+- `openai` (default): LLM-based discovery with web search
+- `hybrid`: Combines web scraping (RT, IMDB) + OpenAI for comprehensive coverage
+- `scraper`: Web scraping only (no OpenAI required)
+- `static`: Built-in test list
 
 #### `sync`
 Synchronize discovered movies with Radarr:
@@ -187,6 +208,7 @@ Options:
   --dry-run / --no-dry-run    Preview without changes (default: --dry-run)
   --force / --no-force        Add even if duplicates detected (default: --no-force)
   --deep-analysis             Enable per-movie quality analysis (v1.6.0+)
+  --discovery-mode TEXT       Discovery mode: openai, hybrid, scraper, or static (v1.11.0+)
   --debug                     Show detailed analysis output
   --help                      Show this message and exit
 ```
@@ -407,6 +429,18 @@ Options:
 ```bash
 radarr-manager discover --limit 10
 radarr-manager sync --dry-run --limit 5
+```
+
+**Hybrid discovery with web scraping (v1.11.0+)**:
+```bash
+# Start Crawl4AI container (required for hybrid/scraper modes)
+docker compose -f docker-compose.dev.yml up -d
+
+# Discover movies using hybrid mode (scraper + OpenAI)
+radarr-manager discover --discovery-mode hybrid --limit 20 --debug
+
+# Sync with hybrid discovery
+radarr-manager sync --discovery-mode hybrid --limit 15 --no-dry-run
 ```
 
 **Deep analysis with quality filtering (v1.6.0+)**:
@@ -775,6 +809,13 @@ async def test_example():
 - OpenAI may not find trending movies at the moment
 - Try running discovery again or use `--provider static` for testing
 - Check OpenAI API status: https://status.openai.com/
+- Try `--discovery-mode hybrid` for more reliable results
+
+**"Scraper error" or "Crawl4AI connection failed"**
+- Ensure Crawl4AI is running: `docker compose -f docker-compose.dev.yml up -d`
+- Check Crawl4AI health: `curl http://localhost:11235/health`
+- Access Crawl4AI dashboard: http://localhost:11235/dashboard
+- Verify `SCRAPER_API_URL` points to correct endpoint
 
 **Movies not being added to Radarr**
 - Remove `--dry-run` flag to perform actual sync
