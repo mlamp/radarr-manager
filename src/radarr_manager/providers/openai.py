@@ -186,8 +186,10 @@ class OpenAIProvider(MovieDiscoveryProvider):
                     try:
                         return json.loads(candidate)
                     except json.JSONDecodeError as exc:  # pragma: no cover
+                        # Show truncated preview for debugging
+                        preview = candidate[:500] + "..." if len(candidate) > 500 else candidate
                         raise ProviderError(
-                            "Failed to parse OpenAI JSON payload. Ensure the model replies with valid JSON.",
+                            f"Failed to parse OpenAI JSON payload: {exc}. Preview: {preview}",
                         ) from exc
 
         raise ProviderError("Unable to parse structured response from OpenAI")

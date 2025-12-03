@@ -259,7 +259,10 @@ def serve(
         radarr-manager serve --host 0.0.0.0 --port 8091 --transport sse
     """
     if debug:
-        _setup_logging(logging.INFO)
+        _setup_logging(logging.DEBUG)
+        # Enable debug logging for MCP SDK to trace SSE communication
+        logging.getLogger("mcp").setLevel(logging.DEBUG)
+        logging.getLogger("radarr_manager.mcp").setLevel(logging.DEBUG)
 
     # Load settings for defaults
     load_result = _safe_load_settings()

@@ -1,6 +1,7 @@
 """MCP server implementation with radarr-manager tools."""
 
 import asyncio
+import logging
 from typing import Any
 
 import uvicorn
@@ -9,8 +10,10 @@ from mcp.server.sse import SseServerTransport
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
-from radarr_manager.clients.radarr import RadarrClient
-from radarr_manager.config.settings import Settings
+logger = logging.getLogger(__name__)
+
+from radarr_manager.clients.radarr import RadarrClient, build_add_movie_payload
+from radarr_manager.config.settings import Settings, load_settings
 from radarr_manager.mcp.schemas import (
     AddMovieParams,
     AddMovieResponse,
@@ -32,12 +35,50 @@ from radarr_manager.services.discovery import DiscoveryService
 from radarr_manager.services.sync import SyncService
 
 
+def _extract_ratings_metadata(radarr_movie: dict[str, Any]) -> dict[str, Any]:
+    """
+    Extract ratings metadata from Radarr movie response for quality analysis.
+
+    Converts Radarr's ratings format to the format expected by DeepAnalysisService.
+    """
+    metadata = {}
+    ratings = radarr_movie.get("ratings", {})
+
+    # Extract IMDb rating
+    if "imdb" in ratings:
+        imdb = ratings["imdb"]
+        metadata["imdb_rating"] = imdb.get("value")
+        metadata["imdb_votes"] = imdb.get("votes", 0)
+
+    # Extract TMDB rating
+    if "tmdb" in ratings:
+        tmdb = ratings["tmdb"]
+        metadata["tmdb_rating"] = tmdb.get("value")
+        metadata["tmdb_votes"] = tmdb.get("votes", 0)
+
+    # Extract Metacritic rating
+    if "metacritic" in ratings:
+        metacritic = ratings["metacritic"]
+        metadata["metacritic_score"] = metacritic.get("value")
+
+    # Extract Rotten Tomatoes ratings
+    if "rottenTomatoes" in ratings:
+        rt = ratings["rottenTomatoes"]
+        metadata["rt_critics_score"] = rt.get("value")
+        # Some Radarr versions may have separate audience score
+        if "audience" in rt:
+            metadata["rt_audience_score"] = rt["audience"].get("value")
+
+    return metadata
+
+
 def create_mcp_server() -> Server:
     """Create and configure the MCP server with all tools."""
     server = Server("radarr-manager")
 
-    # Load settings once at startup
-    settings = Settings()
+    # Load settings once at startup from .env and config files
+    load_result = load_settings()
+    settings = load_result.settings
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -173,18 +214,27 @@ def create_mcp_server() -> Server:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         """Handle tool calls."""
+        logger.info(f"Processing tool call: {name} with arguments: {arguments}")
+
+        result = None
         if name == "search_movie":
-            return await _search_movie(settings, arguments)
+            result = await _search_movie(settings, arguments)
         elif name == "add_movie":
-            return await _add_movie(settings, arguments)
+            result = await _add_movie(settings, arguments)
         elif name == "analyze_quality":
-            return await _analyze_quality(settings, arguments)
+            result = await _analyze_quality(settings, arguments)
         elif name == "discover_movies":
-            return await _discover_movies(settings, arguments)
+            result = await _discover_movies(settings, arguments)
         elif name == "sync_movies":
-            return await _sync_movies(settings, arguments)
+            result = await _sync_movies(settings, arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
+
+        logger.info(f"Tool call {name} completed. Returning {len(result)} TextContent items")
+        for idx, content in enumerate(result):
+            logger.debug(f"TextContent[{idx}]: type={content.type}, text_length={len(content.text)}")
+
+        return result
 
     return server
 
@@ -195,10 +245,11 @@ async def _search_movie(settings: Settings, arguments: dict[str, Any]) -> list[T
 
     async with RadarrClient(
         base_url=settings.radarr_base_url,
-        api_key=settings.radarr_api_key.get_secret_value(),
+        api_key=settings.radarr_api_key,
     ) as client:
-        # Search by title
-        results = await client.lookup_movie(params.title, params.year)
+        # Search by title (include year if provided for better matching)
+        search_term = f"{params.title} {params.year}" if params.year else params.title
+        results = await client.lookup_movie(search_term)
 
         if not results:
             response = SearchMovieResponse(exists=False, message=f"Movie not found: {params.title}")
@@ -241,7 +292,7 @@ async def _add_movie(settings: Settings, arguments: dict[str, Any]) -> list[Text
 
     async with RadarrClient(
         base_url=settings.radarr_base_url,
-        api_key=settings.radarr_api_key.get_secret_value(),
+        api_key=settings.radarr_api_key,
     ) as client:
         # Lookup movie
         if params.tmdb_id:
@@ -249,7 +300,9 @@ async def _add_movie(settings: Settings, arguments: dict[str, Any]) -> list[Text
         elif params.imdb_id:
             results = await client.lookup_movie_by_imdb(params.imdb_id)
         else:
-            results = await client.lookup_movie(params.title, params.year)
+            # Search by title (include year if provided for better matching)
+            search_term = f"{params.title} {params.year}" if params.year else params.title
+            results = await client.lookup_movie(search_term)
 
         if not results:
             response = AddMovieResponse(
@@ -285,16 +338,17 @@ async def _add_movie(settings: Settings, arguments: dict[str, Any]) -> list[Text
         quality_score = None
 
         if params.deep_analysis:
-            analysis_service = DeepAnalysisService(
-                openai_api_key=settings.openai_api_key.get_secret_value(),
-                openai_model=settings.openai_model,
-            )
+            analysis_service = DeepAnalysisService()
+
+            # Extract ratings metadata from Radarr response
+            ratings_metadata = _extract_ratings_metadata(movie_data)
 
             movie_suggestion = MovieSuggestionModel(
                 title=movie_title,
                 year=movie_year,
                 tmdb_id=movie_tmdb_id,
                 imdb_id=movie_data.get("imdbId"),
+                metadata=ratings_metadata,
             )
 
             analysis = await analysis_service.analyze_movie(movie_suggestion)
@@ -331,14 +385,17 @@ async def _add_movie(settings: Settings, arguments: dict[str, Any]) -> list[Text
 
         # Add to Radarr (unless dry run)
         if not params.dry_run:
-            added = await client.add_movie(
-                movie_data=movie_data,
-                quality_profile_id=settings.radarr_quality_profile_id,
-                root_folder_path=settings.radarr_root_folder_path,
-                minimum_availability=settings.radarr_minimum_availability,
-                monitored=settings.radarr_monitor,
-                tags=[settings.radarr_tags] if settings.radarr_tags else [],
+            # Build the payload for Radarr API
+            payload = build_add_movie_payload(
+                lookup=movie_data,
+                quality_profile_id=settings.quality_profile_id,
+                root_folder_path=settings.root_folder_path,
+                minimum_availability=settings.minimum_availability,
+                monitor=settings.monitor,
+                tags=settings.tags if settings.tags else [],
+                search_on_add=params.search_on_add,
             )
+            added = await client.add_movie(payload)
 
             if not added:
                 response = AddMovieResponse(
@@ -381,13 +438,15 @@ async def _analyze_quality(settings: Settings, arguments: dict[str, Any]) -> lis
 
     async with RadarrClient(
         base_url=settings.radarr_base_url,
-        api_key=settings.radarr_api_key.get_secret_value(),
+        api_key=settings.radarr_api_key,
     ) as client:
         # Lookup movie
         if params.tmdb_id:
             results = await client.lookup_movie_by_tmdb(params.tmdb_id)
         else:
-            results = await client.lookup_movie(params.title, params.year)
+            # Search by title (include year if provided for better matching)
+            search_term = f"{params.title} {params.year}" if params.year else params.title
+            results = await client.lookup_movie(search_term)
 
         if not results:
             return [
@@ -403,16 +462,17 @@ async def _analyze_quality(settings: Settings, arguments: dict[str, Any]) -> lis
         movie_tmdb_id = movie_data.get("tmdbId")
 
         # Run analysis
-        analysis_service = DeepAnalysisService(
-            openai_api_key=settings.openai_api_key.get_secret_value(),
-            openai_model=settings.openai_model,
-        )
+        analysis_service = DeepAnalysisService()
+
+        # Extract ratings metadata from Radarr response
+        ratings_metadata = _extract_ratings_metadata(movie_data)
 
         movie_suggestion = MovieSuggestionModel(
             title=movie_title,
             year=movie_year,
             tmdb_id=movie_tmdb_id,
             imdb_id=movie_data.get("imdbId"),
+            metadata=ratings_metadata,
         )
 
         analysis = await analysis_service.analyze_movie(movie_suggestion)
@@ -437,7 +497,7 @@ async def _discover_movies(settings: Settings, arguments: dict[str, Any]) -> lis
     provider = build_provider(
         provider_name=settings.llm_provider,
         openai_api_key=(
-            settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
+            settings.openai_api_key if settings.openai_api_key else None
         ),
         openai_model=settings.openai_model,
     )
@@ -445,7 +505,7 @@ async def _discover_movies(settings: Settings, arguments: dict[str, Any]) -> lis
     # Run discovery
     discovery_service = DiscoveryService(provider=provider)
     suggestions = await discovery_service.discover(
-        limit=params.limit, region=params.region or settings.radarr_region
+        limit=params.limit, region=params.region or settings.region
     )
 
     # Convert to response schema
@@ -453,9 +513,9 @@ async def _discover_movies(settings: Settings, arguments: dict[str, Any]) -> lis
         MovieSuggestion(
             title=movie.title,
             year=movie.year,
-            tmdb_id=movie.tmdb_id,
-            imdb_id=movie.imdb_id,
-            reason=movie.reason,
+            tmdb_id=movie.metadata.get("tmdb_id") if movie.metadata else None,
+            imdb_id=movie.metadata.get("imdb_id") if movie.metadata else None,
+            reason=movie.overview,  # Use overview as reason
         )
         for movie in suggestions
     ]
@@ -478,7 +538,7 @@ async def _sync_movies(settings: Settings, arguments: dict[str, Any]) -> list[Te
     provider = build_provider(
         provider_name=settings.llm_provider,
         openai_api_key=(
-            settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
+            settings.openai_api_key if settings.openai_api_key else None
         ),
         openai_model=settings.openai_model,
     )
@@ -488,14 +548,11 @@ async def _sync_movies(settings: Settings, arguments: dict[str, Any]) -> list[Te
 
     analysis_service = None
     if params.deep_analysis:
-        analysis_service = DeepAnalysisService(
-            openai_api_key=settings.openai_api_key.get_secret_value(),
-            openai_model=settings.openai_model,
-        )
+        analysis_service = DeepAnalysisService()
 
     async with RadarrClient(
         base_url=settings.radarr_base_url,
-        api_key=settings.radarr_api_key.get_secret_value(),
+        api_key=settings.radarr_api_key,
     ) as radarr_client:
         sync_service = SyncService(
             radarr_client=radarr_client,
@@ -507,52 +564,50 @@ async def _sync_movies(settings: Settings, arguments: dict[str, Any]) -> list[Te
         summary = await sync_service.sync(
             limit=params.limit,
             dry_run=params.dry_run,
-            quality_profile_id=settings.radarr_quality_profile_id,
-            root_folder_path=settings.radarr_root_folder_path,
-            minimum_availability=settings.radarr_minimum_availability,
-            monitored=settings.radarr_monitor,
-            tags=[settings.radarr_tags] if settings.radarr_tags else [],
+            quality_profile_id=settings.quality_profile_id,
+            root_folder_path=settings.root_folder_path,
+            minimum_availability=settings.minimum_availability,
+            monitored=settings.monitor,
+            tags=settings.tags if settings.tags else [],
         )
 
-        # Build results
+        # Build results - SyncSummary has queued/skipped/errors (all strings)
         results = []
-        for movie in summary.added:
+        for movie_title in summary.queued:
             results.append(
                 SyncResult(
-                    title=movie.title,
-                    year=movie.year,
-                    status="added",
-                    reason="Successfully added to Radarr",
-                    quality_score=getattr(movie, "quality_score", None),
+                    title=movie_title,
+                    year=None,
+                    status="queued",
+                    reason="Queued for addition to Radarr",
                 )
             )
 
-        for movie in summary.existing:
+        for movie_title in summary.skipped:
             results.append(
                 SyncResult(
-                    title=movie.title,
-                    year=movie.year,
-                    status="exists",
-                    reason="Already in Radarr",
-                )
-            )
-
-        for movie in summary.skipped:
-            results.append(
-                SyncResult(
-                    title=movie.title,
-                    year=movie.year,
+                    title=movie_title,
+                    year=None,
                     status="skipped",
-                    reason="Skipped due to quality threshold",
-                    quality_score=getattr(movie, "quality_score", None),
+                    reason="Skipped (duplicate or filtered)",
+                )
+            )
+
+        for error in summary.errors:
+            results.append(
+                SyncResult(
+                    title="Error",
+                    year=None,
+                    status="error",
+                    reason=error,
                 )
             )
 
         summary_counts = {
-            "added": len(summary.added),
-            "existing": len(summary.existing),
+            "queued": len(summary.queued),
             "skipped": len(summary.skipped),
-            "queued": summary.queued,
+            "errors": len(summary.errors),
+            "dry_run": summary.dry_run,
         }
 
         action = "Would sync" if params.dry_run else "Synced"
@@ -588,18 +643,26 @@ async def run_mcp_http_server(settings: Settings, host: str, port: int) -> None:
             return
 
         path = scope["path"]
+        method = scope["method"]
+        logger.debug(f"Received {method} request to {path}")
 
         if path == "/mcp/sse":
             # Handle SSE endpoint
+            logger.info(f"Opening SSE connection from {scope.get('client', ['unknown'])[0]}")
             async with sse.connect_sse(scope, receive, send) as streams:
+                logger.info("SSE streams connected, starting MCP server.run()")
                 await server.run(streams[0], streams[1], server.create_initialization_options())
+                logger.info("MCP server.run() completed")
 
-        elif path == "/mcp/messages" and scope["method"] == "POST":
+        elif path == "/mcp/messages" and method == "POST":
             # Handle POST messages endpoint
+            logger.debug("Handling POST to /mcp/messages")
             await sse.handle_post_message(scope, receive, send)
+            logger.debug("POST to /mcp/messages completed")
 
         else:
             # 404 for other paths
+            logger.warning(f"404 for {method} {path}")
             await send(
                 {
                     "type": "http.response.start",

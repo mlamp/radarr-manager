@@ -29,10 +29,11 @@ class TestRadarrClient:
 
     @pytest.mark.asyncio
     async def test_client_initialization(self):
-        """Test client is properly initialized with headers."""
+        """Test client is properly initialized with headers and auto-appends /api/v3."""
         client = RadarrClient(base_url="http://localhost:7878", api_key="test-key", timeout=15.0)
 
-        assert client._client.base_url == "http://localhost:7878"
+        # Should auto-append /api/v3 if not present
+        assert str(client._client.base_url) == "http://localhost:7878/api/v3/"
         assert client._client.headers["X-Api-Key"] == "test-key"
         assert client._client.headers["User-Agent"] == "radarr-manager/0.1.0"
         assert client._client.headers["Accept"] == "application/json"
@@ -42,17 +43,17 @@ class TestRadarrClient:
 
     @pytest.mark.asyncio
     async def test_client_strips_trailing_slash_from_base_url(self):
-        """Test that trailing slash is removed from base URL."""
+        """Test that trailing slash is removed from base URL and /api/v3 is appended."""
         client = RadarrClient(base_url="http://localhost:7878/", api_key="test-key")
 
-        assert client._client.base_url == "http://localhost:7878"
+        assert str(client._client.base_url) == "http://localhost:7878/api/v3/"
         await client.close()
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_ping_success(self, client):
         """Test successful ping operation."""
-        respx.get("http://localhost:7878/system/status").mock(
+        respx.get("http://localhost:7878/api/v3/system/status").mock(
             return_value=httpx.Response(200, json=SYSTEM_STATUS_RESPONSE)
         )
 
@@ -64,7 +65,7 @@ class TestRadarrClient:
     @respx.mock
     async def test_ping_http_error(self, client):
         """Test ping with HTTP error response."""
-        respx.get("http://localhost:7878/system/status").mock(
+        respx.get("http://localhost:7878/api/v3/system/status").mock(
             return_value=httpx.Response(401, json={"error": "Unauthorized"})
         )
 
@@ -75,7 +76,7 @@ class TestRadarrClient:
     @respx.mock
     async def test_lookup_movie_success(self, client):
         """Test successful movie lookup."""
-        respx.get("http://localhost:7878/movie/lookup").mock(
+        respx.get("http://localhost:7878/api/v3/movie/lookup").mock(
             return_value=httpx.Response(200, json=MOVIE_LOOKUP_RESPONSE)
         )
 
@@ -88,7 +89,7 @@ class TestRadarrClient:
     @respx.mock
     async def test_lookup_movie_no_results(self, client):
         """Test movie lookup with no results."""
-        respx.get("http://localhost:7878/movie/lookup").mock(
+        respx.get("http://localhost:7878/api/v3/movie/lookup").mock(
             return_value=httpx.Response(200, json=EMPTY_MOVIE_LOOKUP_RESPONSE)
         )
 
@@ -99,7 +100,7 @@ class TestRadarrClient:
     @respx.mock
     async def test_lookup_movie_with_query_params(self, client):
         """Test that movie lookup sends correct query parameters."""
-        mock_route = respx.get("http://localhost:7878/movie/lookup").mock(
+        mock_route = respx.get("http://localhost:7878/api/v3/movie/lookup").mock(
             return_value=httpx.Response(200, json=MOVIE_LOOKUP_RESPONSE)
         )
 
@@ -115,7 +116,7 @@ class TestRadarrClient:
         """Test successful movie addition."""
         payload = {"tmdbId": 693134, "title": "Dune: Part Two"}
 
-        respx.post("http://localhost:7878/movie").mock(
+        respx.post("http://localhost:7878/api/v3/movie").mock(
             return_value=httpx.Response(201, json=ADD_MOVIE_SUCCESS_RESPONSE)
         )
 
@@ -129,7 +130,7 @@ class TestRadarrClient:
         """Test movie addition with duplicate error."""
         payload = {"tmdbId": 693134, "title": "Dune: Part Two"}
 
-        respx.post("http://localhost:7878/movie").mock(
+        respx.post("http://localhost:7878/api/v3/movie").mock(
             return_value=httpx.Response(400, json=ADD_MOVIE_ERROR_RESPONSE)
         )
 
@@ -140,7 +141,7 @@ class TestRadarrClient:
     @respx.mock
     async def test_list_root_folders(self, client):
         """Test listing root folders."""
-        respx.get("http://localhost:7878/rootfolder").mock(
+        respx.get("http://localhost:7878/api/v3/rootfolder").mock(
             return_value=httpx.Response(200, json=ROOT_FOLDERS_RESPONSE)
         )
 
@@ -153,7 +154,7 @@ class TestRadarrClient:
     @respx.mock
     async def test_list_quality_profiles(self, client):
         """Test listing quality profiles."""
-        respx.get("http://localhost:7878/qualityprofile").mock(
+        respx.get("http://localhost:7878/api/v3/qualityprofile").mock(
             return_value=httpx.Response(200, json=QUALITY_PROFILES_RESPONSE)
         )
 
@@ -166,7 +167,7 @@ class TestRadarrClient:
     @respx.mock
     async def test_list_movies(self, client):
         """Test listing movies."""
-        respx.get("http://localhost:7878/movie").mock(
+        respx.get("http://localhost:7878/api/v3/movie").mock(
             return_value=httpx.Response(200, json=MOVIE_LIST_RESPONSE)
         )
 
@@ -181,7 +182,7 @@ class TestRadarrClient:
         """Test ensure_movie succeeds on first attempt."""
         payload = {"tmdbId": 693134, "title": "Dune: Part Two"}
 
-        respx.post("http://localhost:7878/movie").mock(
+        respx.post("http://localhost:7878/api/v3/movie").mock(
             return_value=httpx.Response(201, json=ADD_MOVIE_SUCCESS_RESPONSE)
         )
 
@@ -195,7 +196,7 @@ class TestRadarrClient:
         payload = {"tmdbId": 693134, "title": "Dune: Part Two"}
 
         # First two attempts fail, third succeeds
-        respx.post("http://localhost:7878/movie").mock(
+        respx.post("http://localhost:7878/api/v3/movie").mock(
             side_effect=[
                 httpx.Response(500, json={"error": "Internal Server Error"}),
                 httpx.Response(502, json={"error": "Bad Gateway"}),
@@ -213,7 +214,7 @@ class TestRadarrClient:
         payload = {"tmdbId": 693134, "title": "Dune: Part Two"}
 
         # All attempts fail
-        respx.post("http://localhost:7878/movie").mock(
+        respx.post("http://localhost:7878/api/v3/movie").mock(
             return_value=httpx.Response(500, json={"error": "Internal Server Error"})
         )
 
@@ -379,7 +380,7 @@ class TestBuildAddMoviePayload:
     @respx.mock
     async def test_lookup_movie_by_tmdb(self, client):
         """Test lookup movie by TMDB ID."""
-        respx.get("http://localhost:7878/movie/lookup?term=tmdb%3A693134").mock(
+        respx.get("http://localhost:7878/api/v3/movie/lookup?term=tmdb%3A693134").mock(
             return_value=httpx.Response(200, json=MOVIE_LOOKUP_RESPONSE)
         )
 
@@ -396,7 +397,7 @@ class TestBuildAddMoviePayload:
     @respx.mock
     async def test_lookup_movie_by_imdb(self, client):
         """Test lookup movie by IMDB ID."""
-        respx.get("http://localhost:7878/movie/lookup?term=imdb%3Att15239678").mock(
+        respx.get("http://localhost:7878/api/v3/movie/lookup?term=imdb%3Att15239678").mock(
             return_value=httpx.Response(200, json=MOVIE_LOOKUP_RESPONSE)
         )
 
@@ -413,7 +414,7 @@ class TestBuildAddMoviePayload:
     @respx.mock
     async def test_get_movie_by_tmdb_found(self, client):
         """Test getting movie from library by TMDB ID - movie exists."""
-        respx.get("http://localhost:7878/movie").mock(
+        respx.get("http://localhost:7878/api/v3/movie").mock(
             return_value=httpx.Response(200, json=MOVIE_LIST_RESPONSE)
         )
 
@@ -429,7 +430,7 @@ class TestBuildAddMoviePayload:
     @respx.mock
     async def test_get_movie_by_tmdb_not_found(self, client):
         """Test getting movie from library by TMDB ID - movie doesn't exist."""
-        respx.get("http://localhost:7878/movie").mock(
+        respx.get("http://localhost:7878/api/v3/movie").mock(
             return_value=httpx.Response(200, json=MOVIE_LIST_RESPONSE)
         )
 

@@ -27,6 +27,7 @@ class AddMovieParams(BaseModel):
         5.0, ge=0.0, le=10.0, description="Minimum quality score (0-10)"
     )
     dry_run: bool = Field(True, description="Preview without modifying Radarr")
+    search_on_add: bool = Field(True, description="Automatically search for movie after adding")
 
 
 class AnalyzeQualityParams(BaseModel):

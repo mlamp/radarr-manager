@@ -21,13 +21,18 @@ class RadarrClient:
         *,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
+        # Ensure base_url includes /api/v3 for Radarr v3 API
+        normalized_url = base_url.rstrip("/")
+        if not normalized_url.endswith("/api/v3"):
+            normalized_url = f"{normalized_url}/api/v3"
+
         headers = {
             "X-Api-Key": api_key,
             "User-Agent": USER_AGENT,
             "Accept": "application/json",
         }
         self._client = httpx.AsyncClient(
-            base_url=base_url.rstrip("/"),
+            base_url=normalized_url,
             headers=headers,
             timeout=timeout,
         )
@@ -135,6 +140,7 @@ def build_add_movie_payload(
     monitor: bool,
     minimum_availability: str | None = None,
     tags: Iterable[str] | None = None,
+    search_on_add: bool = True,
 ) -> dict[str, Any]:
     """Assemble the payload expected by Radarr's POST /movie endpoint."""
 
@@ -147,7 +153,7 @@ def build_add_movie_payload(
         "monitored": monitor,
         "rootFolderPath": root_folder_path,
         "addOptions": {
-            "searchForMovie": False,
+            "searchForMovie": search_on_add,
             "monitor": "movieOnly" if monitor else "none",
         },
     }
