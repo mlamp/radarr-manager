@@ -60,9 +60,11 @@ class EnrichmentService:
                 rt_critics = metadata.get("rt_critics_score")
                 rt_audience = metadata.get("rt_audience_score")
                 metacritic = metadata.get("metacritic_score")
+                in_library = metadata.get("in_library", False)
+                library_tag = " [IN LIBRARY]" if in_library else ""
                 logger.info(
                     f"[ENRICH] {movie.title}: IMDb {imdb_str} ({imdb_votes:,} votes), "
-                    f"RT {rt_critics or 'N/A'}%/{rt_audience or 'N/A'}%, MC {metacritic or 'N/A'}"
+                    f"RT {rt_critics or 'N/A'}%/{rt_audience or 'N/A'}%, MC {metacritic or 'N/A'}{library_tag}"
                 )
 
             # Return new MovieSuggestion with enriched metadata
@@ -85,9 +87,16 @@ class EnrichmentService:
         self, ratings: dict[str, Any], lookup: dict[str, Any]
     ) -> dict[str, Any]:
         """Extract ratings from Radarr's ratings structure."""
+        # Check if movie is already in Radarr library
+        # If 'id' is present and non-None, movie exists in library
+        radarr_id = lookup.get("id")
+        in_library = radarr_id is not None
+
         metadata: dict[str, Any] = {
             "tmdb_id": lookup.get("tmdbId"),
             "imdb_id": lookup.get("imdbId"),
+            "radarr_id": radarr_id,
+            "in_library": in_library,
             "imdb_rating": None,
             "imdb_votes": None,
             "rt_critics_score": None,

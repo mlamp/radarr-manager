@@ -18,6 +18,10 @@ SYSTEM_PROMPT = (
     "Each element MUST include: title, release_date (YYYY-MM-DD or null), overview (brief plot summary), "
     "franchise (franchise name or null), confidence (0-1 based on how well it matches criteria), "
     "sources (array of outlet names where you found info). "
+    "IMPORTANT - TITLE FORMAT: Use the EXACT official title as it appears on IMDB or TMDB. "
+    "Do NOT add clarifying suffixes like '(live-action)', '(remake)', '(reboot)', '(2025)', or similar. "
+    "For example: use 'How to Train Your Dragon' not 'How to Train Your Dragon (live-action)'. "
+    "The year in release_date field is sufficient to distinguish remakes from originals. "
     "NOTE: Do NOT include ratings/metadata - ratings will be fetched separately from authoritative sources. "
     'Example format: {"suggestions": [{"title": "Movie Title", "release_date": "2025-08-15", '
     '"overview": "Brief plot description...", "franchise": "Franchise Name", "confidence": 0.9, '
@@ -124,37 +128,33 @@ class OpenAIProvider(MovieDiscoveryProvider):
         if validation_errors and not self._debug:
             raise ProviderError(f"Invalid suggestion payload: {validation_errors[0]}")
 
-        truncated = suggestions[:limit]
-
+        # Don't truncate - accept all valid suggestions from OpenAI
+        # The limit in the prompt is guidance; downstream filtering (library check,
+        # quality analysis) will handle the actual selection
         if self._debug:
-            logger.info(
-                f"[DEBUG] Validated {len(suggestions)} suggestions, returning {len(truncated)}"
-            )
-            for idx, s in enumerate(truncated, 1):
+            extra_note = ""
+            if len(suggestions) > limit:
+                extra_note = f" (requested {limit}, got {len(suggestions)} - keeping all)"
+            logger.info(f"[DEBUG] Validated {len(suggestions)} suggestions{extra_note}")
+            for idx, s in enumerate(suggestions, 1):
                 franchise_info = f" [{s.franchise}]" if s.franchise else ""
                 logger.info(
                     f"[DEBUG]   {idx}. {s.title} ({s.year or 'TBA'}){franchise_info} "
                     f"- confidence: {s.confidence:.2f}"
                 )
 
-            if len(suggestions) > limit:
-                skipped = suggestions[limit:]
-                logger.info(f"[DEBUG] Truncated {len(skipped)} suggestions due to limit:")
-                for s in skipped:
-                    logger.info(f"[DEBUG]   - {s.title} ({s.year or 'TBA'})")
-
-        return truncated
+        return suggestions
 
     def _build_prompt(self, *, limit: int, region: str) -> str:
         timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         return (
-            "Use web_search for upcoming/recent wide theatrical movies. Search: IMDb, Rotten Tomatoes "
-            "(https://www.rottentomatoes.com/browse/movies_in_theaters for currently playing), Metacritic, and TMDB. "
-            "Include recent 2025 theatrical releases from Aug-Nov, blockbusters, franchises, prestige films, AND "
-            "mid-budget releases (action-comedies, dramedies). PRIORITIZE movies featuring Academy Award-winning actors "
-            "(Best Actor/Best Actress winners). When available, prefer films with Oscar-winning lead performances. "
-            f"REQUIRED for each movie: TMDB ID, IMDb ID, IMDb rating + vote count, RT critics score, RT audience score, "
-            f"Metacritic score (if available). {timestamp}. Max {limit} movies for region {region}."
+            "Use web_search to find upcoming and recent wide theatrical movies. Search movie news sites, "
+            "IMDb release calendars, and Rotten Tomatoes (https://www.rottentomatoes.com/browse/movies_in_theaters). "
+            "Focus on 2025 theatrical releases, blockbusters, franchise films, prestige films, and quality "
+            "mid-budget releases. PRIORITIZE movies featuring Academy Award-winning actors. "
+            "Return ONLY: title, release_date, overview, franchise (if applicable), confidence, and sources. "
+            f"Do NOT include any ratings or IDs - those will be fetched separately. "
+            f"{timestamp}. Find up to {limit} movies for region {region}."
         )
 
     def _extract_json(self, response: Any) -> dict[str, Any]:

@@ -24,11 +24,71 @@ class MovieAnalysis:
     should_add: bool
 
 
+MAJOR_FRANCHISES = {
+    "marvel",
+    "mcu",
+    "marvel cinematic universe",
+    "dc",
+    "dceu",
+    "dc extended universe",
+    "dc universe",
+    "disney",
+    "pixar",
+    "star wars",
+    "harry potter",
+    "wizarding world",
+    "fast & furious",
+    "fast and furious",
+    "jurassic",
+    "jurassic world",
+    "jurassic park",
+    "transformers",
+    "mission impossible",
+    "james bond",
+    "007",
+    "avatar",
+    "lord of the rings",
+    "hobbit",
+    "batman",
+    "superman",
+    "spider-man",
+    "spiderman",
+    "x-men",
+    "avengers",
+    "guardians of the galaxy",
+    "toy story",
+    "incredibles",
+    "minions",
+    "despicable me",
+    "shrek",
+    "kung fu panda",
+    "how to train your dragon",
+    "frozen",
+    "moana",
+    "john wick",
+    "planet of the apes",
+    "godzilla",
+    "monsterverse",
+    "conjuring",
+    "knives out",
+    "paddington",
+    "spongebob",
+}
+
+
 class DeepAnalysisService:
     """Service for performing deep per-movie quality analysis."""
 
     def __init__(self, *, debug: bool = False) -> None:
         self._debug = debug
+
+    def _is_major_franchise(self, movie: MovieSuggestion) -> bool:
+        """Check if movie belongs to a major franchise."""
+        if not movie.franchise:
+            return False
+        franchise_lower = movie.franchise.lower()
+        # Check if franchise name matches or contains a major franchise keyword
+        return any(major in franchise_lower for major in MAJOR_FRANCHISES)
 
     async def analyze_movie(self, movie: MovieSuggestion) -> MovieAnalysis:
         """
@@ -64,9 +124,12 @@ class DeepAnalysisService:
                 f"Metacritic: {metacritic_str}"
             )
 
-        red_flags = self._detect_red_flags(metadata)
-        strengths = self._identify_strengths(movie, metadata)
-        quality_score = self._calculate_quality_score(metadata, red_flags, strengths)
+        is_major_franchise = self._is_major_franchise(movie)
+        red_flags = self._detect_red_flags(movie, metadata, is_major_franchise)
+        strengths = self._identify_strengths(movie, metadata, is_major_franchise)
+        quality_score = self._calculate_quality_score(
+            metadata, red_flags, strengths, is_major_franchise
+        )
         rating_details = self._build_rating_details(metadata)
 
         # Determine recommendation
@@ -91,7 +154,9 @@ class DeepAnalysisService:
             should_add=should_add,
         )
 
-    def _detect_red_flags(self, metadata: dict[str, Any]) -> list[str]:
+    def _detect_red_flags(
+        self, movie: MovieSuggestion, metadata: dict[str, Any], is_major_franchise: bool
+    ) -> list[str]:
         """Detect quality red flags that might indicate a poor movie."""
         flags = []
 
@@ -107,17 +172,23 @@ class DeepAnalysisService:
         elif imdb_votes and imdb_votes < 5000:
             flags.append(f"Low IMDb vote count ({imdb_votes:,}) - limited audience data")
 
-        # Poor ratings
-        if imdb_rating and imdb_rating < 6.0:
+        # Poor ratings - more lenient thresholds for major franchises
+        # Major franchises: IMDb >= 5.0, RT >= 25%, Metacritic >= 35
+        # Regular movies: IMDb >= 6.0, RT >= 40%, Metacritic >= 50
+        imdb_threshold = 5.0 if is_major_franchise else 6.0
+        rt_threshold = 25 if is_major_franchise else 40
+        metacritic_threshold = 35 if is_major_franchise else 50
+
+        if imdb_rating and imdb_rating < imdb_threshold:
             flags.append(f"Low IMDb rating ({imdb_rating}/10)")
 
-        if rt_critics is not None and rt_critics < 40:
+        if rt_critics is not None and rt_critics < rt_threshold:
             flags.append(f"Poor RT critics score ({rt_critics}%)")
 
         if rt_audience is not None and rt_audience < 50:
             flags.append(f"Poor RT audience score ({rt_audience}%)")
 
-        if metacritic is not None and metacritic < 50:
+        if metacritic is not None and metacritic < metacritic_threshold:
             flags.append(f"Poor Metacritic score ({metacritic}/100)")
 
         # Large critic/audience gap (> 30 points)
@@ -132,7 +203,9 @@ class DeepAnalysisService:
 
         return flags
 
-    def _identify_strengths(self, movie: MovieSuggestion, metadata: dict[str, Any]) -> list[str]:
+    def _identify_strengths(
+        self, movie: MovieSuggestion, metadata: dict[str, Any], is_major_franchise: bool
+    ) -> list[str]:
         """Identify quality strengths that indicate a good movie."""
         strengths = []
 
@@ -175,19 +248,26 @@ class DeepAnalysisService:
         if movie.confidence >= 0.85:
             strengths.append(f"High discovery confidence ({movie.confidence:.0%})")
 
-        # Franchise/sequel potential
-        if movie.franchise:
+        # Major franchise bonus
+        if is_major_franchise:
+            strengths.append(f"Major franchise ({movie.franchise}) - relaxed quality thresholds")
+        elif movie.franchise:
             strengths.append(f"Part of {movie.franchise} franchise")
 
         return strengths
 
     def _calculate_quality_score(
-        self, metadata: dict[str, Any], red_flags: list[str], strengths: list[str]
+        self,
+        metadata: dict[str, Any],
+        red_flags: list[str],
+        strengths: list[str],
+        is_major_franchise: bool,
     ) -> float:
         """
         Calculate overall quality score (0-10) based on multi-source ratings.
 
         Weighs RT scores more heavily than IMDb as requested by user.
+        Major franchises get a baseline boost to account for critic/audience splits.
         """
         scores = []
 
@@ -221,7 +301,8 @@ class DeepAnalysisService:
 
         if not scores:
             # No ratings available - use provider confidence as fallback
-            return 5.0  # Neutral score
+            # Major franchises get benefit of the doubt
+            return 6.0 if is_major_franchise else 5.0
 
         # Normalize weights to sum to 1.0
         total_weight = sum(weight for _, _, weight in scores)
@@ -237,6 +318,10 @@ class DeepAnalysisService:
         # Apply bonus for strengths
         bonus = min(len(strengths) * 0.2, 2.0)
         quality_score = min(10, quality_score + bonus)
+
+        # Major franchise bonus: +1.5 to help offset typical critic/audience splits
+        if is_major_franchise:
+            quality_score = min(10, quality_score + 1.5)
 
         return round(quality_score, 1)
 

@@ -408,19 +408,31 @@ async def _run_sync(
         enrichment = EnrichmentService(client, debug=debug)
         suggestions = await enrichment.enrich_suggestions(suggestions)
 
-        # Apply deep analysis if requested
-        filtered_suggestions = suggestions
-        if deep_analysis:
+        # Filter out movies already in library (detected during enrichment)
+        in_library = [s for s in suggestions if s.metadata and s.metadata.get("in_library")]
+        not_in_library = [s for s in suggestions if not (s.metadata and s.metadata.get("in_library"))]
+
+        if in_library and debug:
+            typer.secho(
+                f"\n[SKIP] {len(in_library)} movies already in library:",
+                fg=typer.colors.YELLOW,
+            )
+            for movie in in_library:
+                typer.echo(f"  - {movie.title}")
+
+        # Apply deep analysis if requested (only for movies NOT in library)
+        filtered_suggestions = not_in_library
+        if deep_analysis and not_in_library:
             from radarr_manager.services import DeepAnalysisService
 
             typer.secho(
-                f"\n[DEEP ANALYSIS] Analyzing {len(suggestions)} movies...",
+                f"\n[DEEP ANALYSIS] Analyzing {len(not_in_library)} new movies...",
                 fg=typer.colors.CYAN,
                 bold=True,
             )
             analyzer = DeepAnalysisService(debug=debug)
             analyses = []
-            for movie in suggestions:
+            for movie in not_in_library:
                 analysis = await analyzer.analyze_movie(movie)
                 analyses.append(analysis)
 
@@ -463,11 +475,11 @@ async def _run_sync(
 
             # Filter to only movies that passed deep analysis
             filtered_suggestions = [a.movie for a in analyses if a.should_add]
-            skipped_count = len(suggestions) - len(filtered_suggestions)
+            rejected_count = len(not_in_library) - len(filtered_suggestions)
 
             typer.secho(
                 f"Deep Analysis Complete: {len(filtered_suggestions)} approved, "
-                f"{skipped_count} rejected\n",
+                f"{rejected_count} rejected, {len(in_library)} already in library\n",
                 fg=typer.colors.CYAN,
                 bold=True,
             )
