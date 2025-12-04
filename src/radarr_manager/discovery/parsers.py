@@ -207,6 +207,7 @@ PARSER_REGISTRY: dict[str, type[ContentParser]] = {
     "rt_theaters": RTTheatersParser,
     "rt_home": RTHomeParser,
     "imdb_meter": IMDBMeterParser,
+    "imdb_moviemeter": IMDBMeterParser,  # Alias for orchestrator
     "generic": GenericParser,
 }
 
