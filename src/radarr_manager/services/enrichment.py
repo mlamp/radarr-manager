@@ -112,6 +112,10 @@ class EnrichmentService:
         if actual_year and actual_year < (current_year - RE_RELEASE_THRESHOLD_YEARS):
             is_rerelease = True
 
+        # Extract original language for regional cinema detection
+        original_language = lookup.get("originalLanguage", {})
+        original_language_name = original_language.get("name") if original_language else None
+
         metadata: dict[str, Any] = {
             "tmdb_id": lookup.get("tmdbId"),
             "imdb_id": lookup.get("imdbId"),
@@ -119,6 +123,7 @@ class EnrichmentService:
             "in_library": in_library,
             "actual_year": actual_year,
             "is_rerelease": is_rerelease,
+            "original_language": original_language_name,
             "imdb_rating": None,
             "imdb_votes": None,
             "rt_critics_score": None,

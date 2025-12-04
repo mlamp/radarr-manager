@@ -24,6 +24,33 @@ class MovieAnalysis:
     should_add: bool
 
 
+# Regional cinema languages that require higher quality threshold (8.0+ IMDb)
+# These are non-English regional films that typically have limited global distribution
+REGIONAL_CINEMA_LANGUAGES = {
+    "bengali",
+    "hindi",
+    "tamil",
+    "telugu",
+    "kannada",
+    "malayalam",
+    "marathi",
+    "punjabi",
+    "gujarati",
+    "odia",
+    "assamese",
+    "yoruba",      # Nollywood
+    "hausa",       # Nollywood
+    "igbo",        # Nollywood
+    "thai",
+    "indonesian",
+    "vietnamese",
+    "tagalog",     # Filipino
+    "cebuano",     # Filipino
+}
+
+# Minimum IMDb rating required for regional cinema to be considered
+REGIONAL_CINEMA_MIN_IMDB = 8.0
+
 MAJOR_FRANCHISES = {
     "marvel",
     "mcu",
@@ -90,6 +117,21 @@ class DeepAnalysisService:
         # Check if franchise name matches or contains a major franchise keyword
         return any(major in franchise_lower for major in MAJOR_FRANCHISES)
 
+    def _is_regional_cinema(self, metadata: dict[str, Any]) -> tuple[bool, str | None]:
+        """
+        Check if movie is regional cinema based on original language.
+
+        Returns:
+            Tuple of (is_regional, language_name)
+        """
+        original_language = metadata.get("original_language")
+        if not original_language:
+            return False, None
+        lang_lower = original_language.lower()
+        if lang_lower in REGIONAL_CINEMA_LANGUAGES:
+            return True, original_language
+        return False, None
+
     async def analyze_movie(self, movie: MovieSuggestion) -> MovieAnalysis:
         """
         Perform deep analysis on a single movie.
@@ -136,14 +178,25 @@ class DeepAnalysisService:
         recommendation = self._generate_recommendation(movie, quality_score, red_flags, strengths)
 
         # Decision: should we add this movie?
+        should_add = quality_score >= 6.0 and len(red_flags) <= 2
+
         # Reject re-releases (old movies getting theatrical re-runs)
         is_rerelease = metadata.get("is_rerelease", False)
         if is_rerelease:
             should_add = False
             actual_year = metadata.get("actual_year")
             red_flags.append(f"Re-release of {actual_year} film - not a new movie")
-        else:
-            should_add = quality_score >= 6.0 and len(red_flags) <= 2
+
+        # Reject regional cinema unless it has exceptional ratings (8.0+ IMDb)
+        is_regional, regional_lang = self._is_regional_cinema(metadata)
+        if is_regional and should_add:
+            imdb_rating = metadata.get("imdb_rating")
+            if imdb_rating is None or imdb_rating < REGIONAL_CINEMA_MIN_IMDB:
+                should_add = False
+                rating_str = f"{imdb_rating}/10" if imdb_rating else "N/A"
+                red_flags.append(
+                    f"Regional cinema ({regional_lang}) - requires {REGIONAL_CINEMA_MIN_IMDB}+ IMDb, has {rating_str}"
+                )
 
         if self._debug:
             logger.info(f"  Quality Score: {quality_score:.1f}/10")

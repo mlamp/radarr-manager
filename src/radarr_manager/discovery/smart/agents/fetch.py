@@ -101,13 +101,27 @@ class SmartFetchAgent(SmartAgent):
                 # Convert to MovieData
                 movies: list[MovieData] = []
                 for pm in parsed_movies[:max_movies]:
+                    # Extract ratings from extra field if present
+                    ratings = {}
+                    metadata = {}
+                    if pm.extra:
+                        if "imdb_rating" in pm.extra:
+                            ratings["imdb_rating"] = pm.extra["imdb_rating"]
+                        if "imdb_votes" in pm.extra:
+                            ratings["imdb_votes"] = pm.extra["imdb_votes"]
+                        # Keep non-rating data in metadata
+                        for k, v in pm.extra.items():
+                            if k not in ("imdb_rating", "imdb_votes"):
+                                metadata[k] = v
+
                     movies.append(
                         MovieData(
                             title=pm.title,
                             year=pm.year,
                             confidence=0.8,
                             sources=[pm.source],
-                            metadata=pm.extra or {},
+                            ratings=ratings,
+                            metadata=metadata,
                         )
                     )
 

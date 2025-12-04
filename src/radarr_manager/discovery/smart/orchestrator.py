@@ -136,37 +136,34 @@ HIGH-QUALITY, MAINSTREAM movies by coordinating specialized agents.
 
 ## CRITICAL Quality Guidelines
 
-When searching for "blockbuster" or mainstream movies, ALWAYS require:
-- **Wide theatrical release** (not limited, festival, or streaming-only)
-- **High IMDB ratings** (7.0+ for mainstream appeal)
-- **Significant box office** or major studio backing
-- **NOT**: K-pop concerts, anime compilations, re-releases, documentaries, foreign films \
-with limited US distribution (unless specifically requested)
+When searching for movies, prioritize:
+- **Quality over popularity**: Include critically acclaimed films (IMDB 7.0+, high Metacritic)
+- **Both mainstream AND prestige films**: Include arthouse/indie films with strong reviews
+- **Theatrical releases**: Wide or limited theatrical releases are both acceptable
+- **NOT**: K-pop concerts, anime compilations, re-releases, documentaries, regional films \
+with no US distribution (unless specifically requested)
+
+## IMPORTANT: Scale fetch/search limits based on user's requested limit
+
+- If user wants 10 movies: fetch ~20, search ~10 each
+- If user wants 25 movies: fetch ~40, search ~15 each
+- If user wants 50 movies: fetch ~70, search ~25 each
+
+The goal is to fetch roughly 1.5-2x the requested limit to allow for filtering, \
+but NOT excessively more. Avoid fetching 70+ movies when user only wants 25.
 
 ## Your Process (ALWAYS follow this order)
 
 1. **ALWAYS start with fetch_movies from IMDB** - This is the most reliable source:
-   - fetch_movies(url="https://www.imdb.com/search/title/?title_type=feature&moviemeter=,50", \
-parser="imdb_moviemeter", max_movies=30)
+   - Scale max_movies based on user's limit (see above)
 
-2. **Then use search_movies** for additional context:
+2. **Then use search_movies** for additional context (just ONE search, not multiple):
    - "top box office movies [current month year]"
-   - "highest rated movies in theaters [year]"
 
 3. **Validate** - Remove duplicates and invalid entries
 
 4. **Rank with quality criteria**:
-   - "mainstream wide release only, IMDB 7.0+, exclude concerts/anime/documentaries"
-
-## Example Flow
-
-**User: "Find 10 blockbuster movies"**
-1. fetch_movies(url="https://www.imdb.com/search/title/?title_type=feature&moviemeter=,50", \
-parser="imdb_moviemeter", max_movies=30)
-2. search_movies(query="top box office movies December 2025", criteria="wide release")
-3. validate_movies(movies=combined, deduplicate=true)
-4. rank_movies(movies=validated, criteria="mainstream blockbusters, IMDB 7+, \
-exclude anime/concerts/documentaries/re-releases", limit=10)
+   - "IMDB 7.0+ or high Metacritic, exclude concerts/anime compilations/documentaries/re-releases"
 """
 
 
@@ -250,7 +247,9 @@ class SmartOrchestrator:
                 content=(
                     f"**Today's date: {date_str}**\n\n"
                     f"User request: {prompt}\n\n"
-                    f"Limit: {limit} movies\nRegion: {region}"
+                    f"**Limit: {limit} movies** (fetch ~{min(limit * 2, 50)} from IMDB, "
+                    f"search ~{min(limit, 15)} additional)\n"
+                    f"Region: {region}"
                 ),
             ),
         ]
@@ -314,13 +313,16 @@ class SmartOrchestrator:
 
         all_movies: list[MovieData] = []
 
+        # Scale fetch limit based on user's requested limit
+        fetch_limit = min(limit * 2, 50)
+
         # Fetch from RT theaters
         try:
             fetch_agent = self._agents["fetch_movies"]
             result = await fetch_agent.execute(
                 url="https://www.rottentomatoes.com/browse/movies_in_theaters",
                 parser="rt_theaters",
-                max_movies=50,
+                max_movies=fetch_limit,
             )
             all_movies.extend(result.movies)
         except Exception as exc:
@@ -329,9 +331,9 @@ class SmartOrchestrator:
         # Fetch from IMDB
         try:
             result = await fetch_agent.execute(
-                url="https://www.imdb.com/chart/moviemeter/",
+                url=f"https://www.imdb.com/search/title/?title_type=feature&moviemeter=,{fetch_limit}",
                 parser="imdb_moviemeter",
-                max_movies=50,
+                max_movies=fetch_limit,
             )
             all_movies.extend(result.movies)
         except Exception as exc:

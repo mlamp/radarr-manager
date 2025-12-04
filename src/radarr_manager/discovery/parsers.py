@@ -149,26 +149,65 @@ class IMDBMeterParser(ContentParser):
                     )
                 )
 
-        # Search page pattern: N. [Title](url) - from /search/title/ pages
-        # Format: "1. [Zootopia 2](https://www.imdb.com/title/tt14948432/?ref_=sr_i_1)"
+        # Search page pattern with ratings extraction
+        # Format: "### [N. Title](url)\n2025...7.5 (20K)Rate"
+        # We match the header and then look ahead for rating info
         search_pattern = re.compile(
-            r"(\d+)\.\s*\[([^\]]{2,80})\]\(https?://www\.imdb\.com/title/tt\d+",
+            r"###\s*\[(\d+)\.\s*([^\]]{2,80})\]"
+            r"\(https?://www\.imdb\.com/title/tt\d+[^)]*\)"
+            r".*?"  # Non-greedy match for content between
+            r"(\d{4})"  # Year
+            r".*?"  # Runtime, rating info
+            r"(\d+(?:\.\d+)?)\s*\((\d+(?:\.\d+)?[KM]?)\)\s*Rate",  # Rating and votes
+            re.DOTALL,
         )
 
         for match in search_pattern.finditer(content):
             rank = int(match.group(1))
             title = self._clean_title(match.group(2).strip())
+            year = int(match.group(3))
+            rating = float(match.group(4))
+            votes_str = match.group(5)
+
+            # Parse vote count (e.g., "20K" -> 20000, "1.5M" -> 1500000)
+            votes = self._parse_vote_count(votes_str)
 
             if rank <= 100 and self._is_valid_title(title) and title.lower() not in seen_titles:
                 seen_titles.add(title.lower())
                 movies.append(
                     ParsedMovie(
                         title=title,
+                        year=year,
                         source=self.name,
                         url=source_url,
                         rank=rank,
+                        extra={
+                            "imdb_rating": rating,
+                            "imdb_votes": votes,
+                        },
                     )
                 )
+
+        # Simpler fallback pattern if above didn't match (older format)
+        if not movies:
+            simple_search_pattern = re.compile(
+                r"(\d+)\.\s*\[([^\]]{2,80})\]\(https?://www\.imdb\.com/title/tt\d+",
+            )
+
+            for match in simple_search_pattern.finditer(content):
+                rank = int(match.group(1))
+                title = self._clean_title(match.group(2).strip())
+
+                if rank <= 100 and self._is_valid_title(title) and title.lower() not in seen_titles:
+                    seen_titles.add(title.lower())
+                    movies.append(
+                        ParsedMovie(
+                            title=title,
+                            source=self.name,
+                            url=source_url,
+                            rank=rank,
+                        )
+                    )
 
         # Fallback: Simple markdown links
         if not movies:
@@ -180,6 +219,21 @@ class IMDBMeterParser(ContentParser):
                     movies.append(ParsedMovie(title=title, source=self.name, url=source_url))
 
         return movies
+
+    def _parse_vote_count(self, votes_str: str) -> int:
+        """Parse vote count string like '20K' or '1.5M' into integer."""
+        votes_str = votes_str.strip().upper()
+        multiplier = 1
+        if votes_str.endswith("K"):
+            multiplier = 1000
+            votes_str = votes_str[:-1]
+        elif votes_str.endswith("M"):
+            multiplier = 1_000_000
+            votes_str = votes_str[:-1]
+        try:
+            return int(float(votes_str) * multiplier)
+        except ValueError:
+            return 0
 
 
 class GenericParser(ContentParser):

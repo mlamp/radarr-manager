@@ -56,9 +56,14 @@ class SmartRankerAgent(SmartAgent):
 You are a movie ranking assistant. Given a list of movies and ranking criteria:
 
 1. Analyze each movie's relevance to the criteria
-2. Rank movies from most to least relevant
-3. Add brief plot overviews (1-2 sentences) if missing
-4. Adjust confidence scores based on fit with criteria
+2. **USE PROVIDED RATINGS**: If imdb_rating is provided, use it! IMDB 7.0+ = high quality.
+3. Rank movies from most to least relevant
+4. Add brief plot overviews (1-2 sentences) if missing
+5. Adjust confidence scores based on fit with criteria
+
+IMPORTANT: When imdb_rating and imdb_votes are provided in the input, USE THEM for ranking.
+- A movie with imdb_rating 7.5 and 20000 votes is high quality and should be included
+- Don't exclude movies just because they're not "mainstream" - include acclaimed indie films
 
 Return a JSON object with:
 - "ranked_movies": Array of movies in ranked order
@@ -75,11 +80,11 @@ Example:
             "overview": "A gothic vampire tale...",
             "confidence": 0.95,
             "sources": ["RT", "IMDB"],
-            "reasoning": "Classic supernatural horror, perfect for Halloween"
+            "reasoning": "IMDB 7.8 with 50K votes, classic supernatural horror"
         }
     ],
     "excluded_movies": [
-        {"title": "Smile 2", "reason": "More psychological thriller than horror"}
+        {"title": "Concert Film XYZ", "reason": "K-pop concert, not a narrative film"}
     ]
 }
 
@@ -127,9 +132,18 @@ Return ONLY valid JSON, no markdown or explanations."""
                 # Parse input movies
                 movies = self._parse_input_movies(movies_data)
 
-                # Build LLM prompt
+                # Build LLM prompt with ratings data
                 movie_list = json.dumps(
-                    [{"title": m.title, "year": m.year, "sources": m.sources} for m in movies],
+                    [
+                        {
+                            "title": m.title,
+                            "year": m.year,
+                            "sources": m.sources,
+                            "imdb_rating": m.ratings.get("imdb_rating"),
+                            "imdb_votes": m.ratings.get("imdb_votes"),
+                        }
+                        for m in movies
+                    ],
                     indent=2,
                 )
 
