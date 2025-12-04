@@ -7,16 +7,15 @@
 #
 # Usage:
 #   make version          - Show current version
-#   make bump-patch       - Bump patch version (1.12.0 -> 1.12.1)
-#   make bump-minor       - Bump minor version (1.12.0 -> 1.13.0)
-#   make bump-major       - Bump major version (1.12.0 -> 2.0.0)
-#   make tag              - Create git tag from current version
-#   make docker-build     - Build Docker image
+#   make release-patch    - Bump patch, commit, tag, build, push (1.12.0 -> 1.12.1)
+#   make release-minor    - Bump minor, commit, tag, build, push (1.12.0 -> 1.13.0)
+#   make release-major    - Bump major, commit, tag, build, push (1.12.0 -> 2.0.0)
+#   make release          - Release current version (tag + build + push)
+#   make docker-build     - Build Docker image only
 #   make docker-push      - Push Docker image to registry
-#   make release          - Full release: tag + build + push
 
 .PHONY: version bump-patch bump-minor bump-major tag docker-build docker-push release \
-        lint test clean help check-clean check-version
+        release-patch release-minor release-major lint test clean help check-clean check-version
 
 # Configuration
 DOCKER_REPO := mlamp/radarr-manager
@@ -31,17 +30,16 @@ VERSION := $(shell python3 -c "import re; print(re.search(r'version = \"([^\"]+)
 help:
 	@echo "radarr-manager build and release tools"
 	@echo ""
-	@echo "Version Management:"
-	@echo "  make version       - Show current version ($(VERSION))"
-	@echo "  make bump-patch    - Bump patch version (x.y.Z)"
-	@echo "  make bump-minor    - Bump minor version (x.Y.0)"
-	@echo "  make bump-major    - Bump major version (X.0.0)"
+	@echo "Release (recommended - does everything):"
+	@echo "  make release-patch - Bump patch + commit + tag + build + push (x.y.Z)"
+	@echo "  make release-minor - Bump minor + commit + tag + build + push (x.Y.0)"
+	@echo "  make release-major - Bump major + commit + tag + build + push (X.0.0)"
 	@echo ""
-	@echo "Release:"
-	@echo "  make tag           - Create git tag v$(VERSION)"
-	@echo "  make docker-build  - Build Docker image $(DOCKER_REPO):$(VERSION)"
+	@echo "Manual Steps (if needed):"
+	@echo "  make version       - Show current version ($(VERSION))"
+	@echo "  make release       - Release current version (tag + build + push)"
+	@echo "  make docker-build  - Build Docker image only"
 	@echo "  make docker-push   - Push Docker image to registry"
-	@echo "  make release       - Full release pipeline"
 	@echo ""
 	@echo "Development:"
 	@echo "  make lint          - Run linters (ruff, black)"
@@ -53,8 +51,8 @@ version:
 	@echo "Git tag: v$(VERSION)"
 	@echo "Docker image: $(DOCKER_REPO):$(VERSION)"
 
-# Bump version helpers
-bump-patch:
+# Internal: bump version in pyproject.toml (used by release-* targets)
+_bump-patch:
 	@python3 -c "\
 import re; \
 f = open('pyproject.toml', 'r'); content = f.read(); f.close(); \
@@ -62,12 +60,11 @@ version = re.search(r'version = \"([^\"]+)\"', content).group(1); \
 parts = version.split('.'); \
 parts[2] = str(int(parts[2]) + 1); \
 new_version = '.'.join(parts); \
-content = re.sub(r'version = \"[^\"]+\"', f'version = \"{new_version}\"', content); \
+content = re.sub(r'version = \"[^\"]+\"', f'version = \"{new_version}\"', content, count=1); \
 f = open('pyproject.toml', 'w'); f.write(content); f.close(); \
 print(f'Bumped version: {version} -> {new_version}')"
-	@echo "Don't forget to: git add pyproject.toml && git commit -m 'chore: bump version to $$(make -s version-only)'"
 
-bump-minor:
+_bump-minor:
 	@python3 -c "\
 import re; \
 f = open('pyproject.toml', 'r'); content = f.read(); f.close(); \
@@ -76,12 +73,11 @@ parts = version.split('.'); \
 parts[1] = str(int(parts[1]) + 1); \
 parts[2] = '0'; \
 new_version = '.'.join(parts); \
-content = re.sub(r'version = \"[^\"]+\"', f'version = \"{new_version}\"', content); \
+content = re.sub(r'version = \"[^\"]+\"', f'version = \"{new_version}\"', content, count=1); \
 f = open('pyproject.toml', 'w'); f.write(content); f.close(); \
 print(f'Bumped version: {version} -> {new_version}')"
-	@echo "Don't forget to: git add pyproject.toml && git commit -m 'chore: bump version to $$(make -s version-only)'"
 
-bump-major:
+_bump-major:
 	@python3 -c "\
 import re; \
 f = open('pyproject.toml', 'r'); content = f.read(); f.close(); \
@@ -91,13 +87,100 @@ parts[0] = str(int(parts[0]) + 1); \
 parts[1] = '0'; \
 parts[2] = '0'; \
 new_version = '.'.join(parts); \
-content = re.sub(r'version = \"[^\"]+\"', f'version = \"{new_version}\"', content); \
+content = re.sub(r'version = \"[^\"]+\"', f'version = \"{new_version}\"', content, count=1); \
 f = open('pyproject.toml', 'w'); f.write(content); f.close(); \
 print(f'Bumped version: {version} -> {new_version}')"
-	@echo "Don't forget to: git add pyproject.toml && git commit -m 'chore: bump version to $$(make -s version-only)'"
 
-version-only:
-	@echo "$(VERSION)"
+# Get new version after bump (re-reads pyproject.toml)
+_get-version = $(shell python3 -c "import re; print(re.search(r'version = \"([^\"]+)\"', open('pyproject.toml').read()).group(1))")
+
+# Full release pipelines: bump + commit + tag + build + push
+release-patch: check-clean
+	@echo "=========================================="
+	@echo "Starting PATCH release..."
+	@echo "=========================================="
+	@$(MAKE) _bump-patch
+	$(eval NEW_VERSION := $(_get-version))
+	@echo ""
+	@echo "Step 1/4: Committing version bump..."
+	git add pyproject.toml
+	git commit -m "chore: bump version to $(NEW_VERSION)"
+	@echo ""
+	@echo "Step 2/4: Creating git tag v$(NEW_VERSION)..."
+	git tag -a "v$(NEW_VERSION)" -m "Release v$(NEW_VERSION)"
+	@echo ""
+	@echo "Step 3/4: Building and pushing Docker image..."
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		-t $(DOCKER_REPO):$(NEW_VERSION) \
+		-t $(DOCKER_REPO):latest \
+		--push \
+		.
+	@echo ""
+	@echo "Step 4/4: Pushing git tag..."
+	git push origin main "v$(NEW_VERSION)"
+	@echo ""
+	@echo "=========================================="
+	@echo "Release v$(NEW_VERSION) complete!"
+	@echo "=========================================="
+
+release-minor: check-clean
+	@echo "=========================================="
+	@echo "Starting MINOR release..."
+	@echo "=========================================="
+	@$(MAKE) _bump-minor
+	$(eval NEW_VERSION := $(_get-version))
+	@echo ""
+	@echo "Step 1/4: Committing version bump..."
+	git add pyproject.toml
+	git commit -m "chore: bump version to $(NEW_VERSION)"
+	@echo ""
+	@echo "Step 2/4: Creating git tag v$(NEW_VERSION)..."
+	git tag -a "v$(NEW_VERSION)" -m "Release v$(NEW_VERSION)"
+	@echo ""
+	@echo "Step 3/4: Building and pushing Docker image..."
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		-t $(DOCKER_REPO):$(NEW_VERSION) \
+		-t $(DOCKER_REPO):latest \
+		--push \
+		.
+	@echo ""
+	@echo "Step 4/4: Pushing git tag..."
+	git push origin main "v$(NEW_VERSION)"
+	@echo ""
+	@echo "=========================================="
+	@echo "Release v$(NEW_VERSION) complete!"
+	@echo "=========================================="
+
+release-major: check-clean
+	@echo "=========================================="
+	@echo "Starting MAJOR release..."
+	@echo "=========================================="
+	@$(MAKE) _bump-major
+	$(eval NEW_VERSION := $(_get-version))
+	@echo ""
+	@echo "Step 1/4: Committing version bump..."
+	git add pyproject.toml
+	git commit -m "chore: bump version to $(NEW_VERSION)"
+	@echo ""
+	@echo "Step 2/4: Creating git tag v$(NEW_VERSION)..."
+	git tag -a "v$(NEW_VERSION)" -m "Release v$(NEW_VERSION)"
+	@echo ""
+	@echo "Step 3/4: Building and pushing Docker image..."
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		-t $(DOCKER_REPO):$(NEW_VERSION) \
+		-t $(DOCKER_REPO):latest \
+		--push \
+		.
+	@echo ""
+	@echo "Step 4/4: Pushing git tag..."
+	git push origin main "v$(NEW_VERSION)"
+	@echo ""
+	@echo "=========================================="
+	@echo "Release v$(NEW_VERSION) complete!"
+	@echo "=========================================="
 
 # Check working directory is clean
 check-clean:
