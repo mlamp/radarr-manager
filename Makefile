@@ -91,96 +91,94 @@ content = re.sub(r'version = \"[^\"]+\"', f'version = \"{new_version}\"', conten
 f = open('pyproject.toml', 'w'); f.write(content); f.close(); \
 print(f'Bumped version: {version} -> {new_version}')"
 
-# Get new version after bump (re-reads pyproject.toml)
-_get-version = $(shell python3 -c "import re; print(re.search(r'version = \"([^\"]+)\"', open('pyproject.toml').read()).group(1))")
-
 # Full release pipelines: bump + commit + tag + build + push
+# Uses shell script to properly read version after bump
 release-patch: check-clean
-	@echo "=========================================="
-	@echo "Starting PATCH release..."
-	@echo "=========================================="
-	@$(MAKE) _bump-patch
-	$(eval NEW_VERSION := $(_get-version))
-	@echo ""
-	@echo "Step 1/4: Committing version bump..."
-	git add pyproject.toml
-	git commit -m "chore: bump version to $(NEW_VERSION)"
-	@echo ""
-	@echo "Step 2/4: Creating git tag v$(NEW_VERSION)..."
-	git tag -a "v$(NEW_VERSION)" -m "Release v$(NEW_VERSION)"
-	@echo ""
-	@echo "Step 3/4: Building and pushing Docker image..."
+	@echo "=========================================="; \
+	echo "Starting PATCH release..."; \
+	echo "=========================================="; \
+	$(MAKE) -s _bump-patch; \
+	NEW_VERSION=$$(python3 -c "import re; print(re.search(r'version = \"([^\"]+)\"', open('pyproject.toml').read()).group(1))"); \
+	echo ""; \
+	echo "Step 1/4: Committing version bump..."; \
+	git add pyproject.toml; \
+	git commit -m "chore: bump version to $$NEW_VERSION"; \
+	echo ""; \
+	echo "Step 2/4: Creating git tag v$$NEW_VERSION..."; \
+	git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION"; \
+	echo ""; \
+	echo "Step 3/4: Building and pushing Docker image..."; \
 	docker buildx build \
 		--platform $(PLATFORMS) \
-		-t $(DOCKER_REPO):$(NEW_VERSION) \
+		-t $(DOCKER_REPO):$$NEW_VERSION \
 		-t $(DOCKER_REPO):latest \
 		--push \
-		.
-	@echo ""
-	@echo "Step 4/4: Pushing git tag..."
-	git push origin main "v$(NEW_VERSION)"
-	@echo ""
-	@echo "=========================================="
-	@echo "Release v$(NEW_VERSION) complete!"
-	@echo "=========================================="
+		.; \
+	echo ""; \
+	echo "Step 4/4: Pushing git tag..."; \
+	git push origin main "v$$NEW_VERSION"; \
+	echo ""; \
+	echo "=========================================="; \
+	echo "Release v$$NEW_VERSION complete!"; \
+	echo "=========================================="
 
 release-minor: check-clean
-	@echo "=========================================="
-	@echo "Starting MINOR release..."
-	@echo "=========================================="
-	@$(MAKE) _bump-minor
-	$(eval NEW_VERSION := $(_get-version))
-	@echo ""
-	@echo "Step 1/4: Committing version bump..."
-	git add pyproject.toml
-	git commit -m "chore: bump version to $(NEW_VERSION)"
-	@echo ""
-	@echo "Step 2/4: Creating git tag v$(NEW_VERSION)..."
-	git tag -a "v$(NEW_VERSION)" -m "Release v$(NEW_VERSION)"
-	@echo ""
-	@echo "Step 3/4: Building and pushing Docker image..."
+	@echo "=========================================="; \
+	echo "Starting MINOR release..."; \
+	echo "=========================================="; \
+	$(MAKE) -s _bump-minor; \
+	NEW_VERSION=$$(python3 -c "import re; print(re.search(r'version = \"([^\"]+)\"', open('pyproject.toml').read()).group(1))"); \
+	echo ""; \
+	echo "Step 1/4: Committing version bump..."; \
+	git add pyproject.toml; \
+	git commit -m "chore: bump version to $$NEW_VERSION"; \
+	echo ""; \
+	echo "Step 2/4: Creating git tag v$$NEW_VERSION..."; \
+	git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION"; \
+	echo ""; \
+	echo "Step 3/4: Building and pushing Docker image..."; \
 	docker buildx build \
 		--platform $(PLATFORMS) \
-		-t $(DOCKER_REPO):$(NEW_VERSION) \
+		-t $(DOCKER_REPO):$$NEW_VERSION \
 		-t $(DOCKER_REPO):latest \
 		--push \
-		.
-	@echo ""
-	@echo "Step 4/4: Pushing git tag..."
-	git push origin main "v$(NEW_VERSION)"
-	@echo ""
-	@echo "=========================================="
-	@echo "Release v$(NEW_VERSION) complete!"
-	@echo "=========================================="
+		.; \
+	echo ""; \
+	echo "Step 4/4: Pushing git tag..."; \
+	git push origin main "v$$NEW_VERSION"; \
+	echo ""; \
+	echo "=========================================="; \
+	echo "Release v$$NEW_VERSION complete!"; \
+	echo "=========================================="
 
 release-major: check-clean
-	@echo "=========================================="
-	@echo "Starting MAJOR release..."
-	@echo "=========================================="
-	@$(MAKE) _bump-major
-	$(eval NEW_VERSION := $(_get-version))
-	@echo ""
-	@echo "Step 1/4: Committing version bump..."
-	git add pyproject.toml
-	git commit -m "chore: bump version to $(NEW_VERSION)"
-	@echo ""
-	@echo "Step 2/4: Creating git tag v$(NEW_VERSION)..."
-	git tag -a "v$(NEW_VERSION)" -m "Release v$(NEW_VERSION)"
-	@echo ""
-	@echo "Step 3/4: Building and pushing Docker image..."
+	@echo "=========================================="; \
+	echo "Starting MAJOR release..."; \
+	echo "=========================================="; \
+	$(MAKE) -s _bump-major; \
+	NEW_VERSION=$$(python3 -c "import re; print(re.search(r'version = \"([^\"]+)\"', open('pyproject.toml').read()).group(1))"); \
+	echo ""; \
+	echo "Step 1/4: Committing version bump..."; \
+	git add pyproject.toml; \
+	git commit -m "chore: bump version to $$NEW_VERSION"; \
+	echo ""; \
+	echo "Step 2/4: Creating git tag v$$NEW_VERSION..."; \
+	git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION"; \
+	echo ""; \
+	echo "Step 3/4: Building and pushing Docker image..."; \
 	docker buildx build \
 		--platform $(PLATFORMS) \
-		-t $(DOCKER_REPO):$(NEW_VERSION) \
+		-t $(DOCKER_REPO):$$NEW_VERSION \
 		-t $(DOCKER_REPO):latest \
 		--push \
-		.
-	@echo ""
-	@echo "Step 4/4: Pushing git tag..."
-	git push origin main "v$(NEW_VERSION)"
-	@echo ""
-	@echo "=========================================="
-	@echo "Release v$(NEW_VERSION) complete!"
-	@echo "=========================================="
+		.; \
+	echo ""; \
+	echo "Step 4/4: Pushing git tag..."; \
+	git push origin main "v$$NEW_VERSION"; \
+	echo ""; \
+	echo "=========================================="; \
+	echo "Release v$$NEW_VERSION complete!"; \
+	echo "=========================================="
 
 # Check working directory is clean
 check-clean:
