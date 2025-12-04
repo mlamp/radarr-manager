@@ -9,6 +9,12 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
   - Scrapes Rotten Tomatoes (theaters + streaming) and IMDB moviemeter
   - Supports Crawl4AI (default) or Firecrawl as scraping backends
   - Merges scraped titles with OpenAI suggestions for best coverage
+- 🧠 **Smart Agentic Discovery Mode (v1.6.2+)**: LLM orchestrator coordinates specialized agents
+  - GPT-4o orchestrator reasons about which agents to call and in what order
+  - Fetches from IMDB moviemeter (top 10/50/100 most popular)
+  - Web search for current box office and trending movies
+  - Intelligent validation and ranking with quality filtering
+  - Excludes low-quality content (concerts, anime compilations, re-releases)
 - 🚀 **MCP Service Mode (v1.8.0+)**: Run as MCP server for AI agent integration
   - Long-running service with structured tool API
   - HTTP/SSE transport for network accessibility (v1.9.0+)
@@ -38,8 +44,8 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
 
 - Python 3.12+
 - A running Radarr instance
-- OpenAI API key (for movie discovery in `openai` or `hybrid` mode)
-- Crawl4AI or Firecrawl service (optional, for `hybrid` or `scraper` mode)
+- OpenAI API key (for movie discovery in `openai`, `hybrid`, or `smart_agentic` mode)
+- Crawl4AI or Firecrawl service (optional, for `hybrid`, `scraper`, or `smart_agentic` mode)
 
 ## Installation
 
@@ -126,7 +132,7 @@ export MCP_PORT=8091
 export MCP_TRANSPORT="stdio"  # or "sse" for HTTP/SSE transport
 
 # Discovery Mode (v1.11.0+)
-export DISCOVERY_MODE="openai"  # openai, hybrid, or scraper
+export DISCOVERY_MODE="openai"  # openai, hybrid, scraper, or smart_agentic
 
 # Scraper Configuration (for hybrid/scraper modes)
 export SCRAPER_PROVIDER="crawl4ai"  # crawl4ai or firecrawl
@@ -186,7 +192,7 @@ radarr-manager discover [OPTIONS]
 Options:
   --limit INTEGER          Maximum number of movies to return (default: 5)
   --provider TEXT          Override provider (openai, static)
-  --discovery-mode TEXT    Discovery mode: openai, hybrid, scraper, or static (v1.11.0+)
+  --discovery-mode TEXT    Discovery mode: openai, hybrid, scraper, smart_agentic, or static (v1.11.0+)
   --debug                  Show detailed discovery output
   --help                   Show this message and exit
 ```
@@ -195,6 +201,7 @@ Options:
 - `openai` (default): LLM-based discovery with web search
 - `hybrid`: Combines web scraping (RT, IMDB) + OpenAI for comprehensive coverage
 - `scraper`: Web scraping only (no OpenAI required)
+- `smart_agentic`: LLM orchestrator coordinates specialized agents for highest quality results
 - `static`: Built-in test list
 
 #### `sync`
@@ -208,7 +215,7 @@ Options:
   --dry-run / --no-dry-run    Preview without changes (default: --dry-run)
   --force / --no-force        Add even if duplicates detected (default: --no-force)
   --deep-analysis             Enable per-movie quality analysis (v1.6.0+)
-  --discovery-mode TEXT       Discovery mode: openai, hybrid, scraper, or static (v1.11.0+)
+  --discovery-mode TEXT       Discovery mode: openai, hybrid, scraper, smart_agentic, or static (v1.11.0+)
   --debug                     Show detailed analysis output
   --help                      Show this message and exit
 ```
@@ -442,6 +449,24 @@ radarr-manager discover --discovery-mode hybrid --limit 20 --debug
 # Sync with hybrid discovery
 radarr-manager sync --discovery-mode hybrid --limit 15 --no-dry-run
 ```
+
+**Smart agentic discovery (v1.6.2+)** - highest quality results:
+```bash
+# Start Crawl4AI container (required for smart_agentic mode)
+docker compose -f docker-compose.dev.yml up -d
+
+# Discover movies using smart agentic mode (LLM orchestrator + agents)
+radarr-manager discover --discovery-mode smart_agentic --limit 10 --debug
+
+# Sync with smart agentic discovery
+radarr-manager sync --discovery-mode smart_agentic --limit 10 --no-dry-run
+```
+
+The smart agentic mode uses a GPT-4o orchestrator that:
+1. Fetches from IMDB moviemeter (top popular movies)
+2. Searches for current box office and trending movies
+3. Validates and filters out low-quality content
+4. Ranks by mainstream appeal and quality (IMDB 7+)
 
 **Deep analysis with quality filtering (v1.6.0+)**:
 ```bash
@@ -810,6 +835,7 @@ async def test_example():
 - Try running discovery again or use `--provider static` for testing
 - Check OpenAI API status: https://status.openai.com/
 - Try `--discovery-mode hybrid` for more reliable results
+- Try `--discovery-mode smart_agentic` for highest quality mainstream movies
 
 **"Scraper error" or "Crawl4AI connection failed"**
 - Ensure Crawl4AI is running: `docker compose -f docker-compose.dev.yml up -d`

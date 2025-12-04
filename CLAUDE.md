@@ -40,6 +40,11 @@ This is a Python CLI tool that discovers blockbuster movies using LLM providers 
 - **Services** (`src/radarr_manager/services/`): Business logic for discovery and synchronization
 - **Radarr Client** (`src/radarr_manager/clients/radarr.py`): HTTP client for Radarr API integration
 - **Configuration** (`src/radarr_manager/config/`): Settings from env vars, .env files, and TOML config
+- **Smart Discovery** (`src/radarr_manager/discovery/smart/`): LLM orchestrator with specialized agents
+  - `orchestrator.py`: GPT-4o orchestrator that coordinates agents via tool calls
+  - `agents/`: Specialized agents (FetchAgent, SearchAgent, ValidatorAgent, RankerAgent)
+  - `protocol.py`: Agent-to-agent communication via structured markdown with embedded JSON
+  - `parsers.py`: Content parsers for IMDB, Rotten Tomatoes, etc.
 
 ### Configuration System
 
@@ -59,6 +64,40 @@ Key environment variables (copy `.env.example` to `.env`):
 1. **Discovery**: `DiscoveryService` calls configured provider to get movie suggestions
 2. **Sync**: `SyncService` takes suggestions and adds them to Radarr (with duplicate detection)
 3. **Provider Pattern**: Factory creates provider instances based on config/CLI overrides
+
+### Smart Agentic Discovery (v1.6.2+)
+
+The `smart_agentic` discovery mode uses an LLM orchestrator pattern:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Smart Orchestrator (GPT-4o)                   │
+│  1. Parse user prompt → Understand intent                        │
+│  2. Plan strategy → Which agents to call?                        │
+│  3. Execute agents → Tool calls                                  │
+│  4. Interpret results → Read markdown reports                    │
+│  5. Adapt strategy → Handle failures, gaps                       │
+│  6. Return final results                                         │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                   Tool Calls (JSON)
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│  fetch_movies │   │ search_movies │   │ rank_movies   │
+│  (FetchAgent) │   │ (SearchAgent) │   │ (RankerAgent) │
+└───────────────┘   └───────────────┘   └───────────────┘
+```
+
+Key URLs fetched by the orchestrator:
+- `https://www.imdb.com/search/title/?title_type=feature&moviemeter=,50` - IMDB top 50 most popular
+- Web search for current box office and trending movies
+
+Quality filtering criteria:
+- Wide theatrical release (not limited, festival, or streaming-only)
+- High IMDB ratings (7.0+ for mainstream appeal)
+- Excludes: K-pop concerts, anime compilations, re-releases, documentaries
 
 ### Testing Guidelines
 
