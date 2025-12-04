@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from radarr_manager.clients.radarr import RadarrClient
 from radarr_manager.models import MovieSuggestion
 
 logger = logging.getLogger(__name__)
+
+# Movies older than this many years are flagged as re-releases
+RE_RELEASE_THRESHOLD_YEARS = 2
 
 
 class EnrichmentService:
@@ -61,10 +65,17 @@ class EnrichmentService:
                 rt_audience = metadata.get("rt_audience_score")
                 metacritic = metadata.get("metacritic_score")
                 in_library = metadata.get("in_library", False)
-                library_tag = " [IN LIBRARY]" if in_library else ""
+                is_rerelease = metadata.get("is_rerelease", False)
+                actual_year = metadata.get("actual_year")
+                tags = []
+                if in_library:
+                    tags.append("IN LIBRARY")
+                if is_rerelease:
+                    tags.append(f"RE-RELEASE from {actual_year}")
+                tag_str = f" [{', '.join(tags)}]" if tags else ""
                 logger.info(
                     f"[ENRICH] {movie.title}: IMDb {imdb_str} ({imdb_votes:,} votes), "
-                    f"RT {rt_critics or 'N/A'}%/{rt_audience or 'N/A'}%, MC {metacritic or 'N/A'}{library_tag}"
+                    f"RT {rt_critics or 'N/A'}%/{rt_audience or 'N/A'}%, MC {metacritic or 'N/A'}{tag_str}"
                 )
 
             # Return new MovieSuggestion with enriched metadata
@@ -92,11 +103,22 @@ class EnrichmentService:
         radarr_id = lookup.get("id")
         in_library = radarr_id is not None
 
+        # Get actual release year from TMDB data
+        actual_year = lookup.get("year")
+        current_year = datetime.now().year
+
+        # Detect re-releases: movies where actual year is significantly older
+        is_rerelease = False
+        if actual_year and actual_year < (current_year - RE_RELEASE_THRESHOLD_YEARS):
+            is_rerelease = True
+
         metadata: dict[str, Any] = {
             "tmdb_id": lookup.get("tmdbId"),
             "imdb_id": lookup.get("imdbId"),
             "radarr_id": radarr_id,
             "in_library": in_library,
+            "actual_year": actual_year,
+            "is_rerelease": is_rerelease,
             "imdb_rating": None,
             "imdb_votes": None,
             "rt_critics_score": None,

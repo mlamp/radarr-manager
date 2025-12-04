@@ -136,7 +136,14 @@ class DeepAnalysisService:
         recommendation = self._generate_recommendation(movie, quality_score, red_flags, strengths)
 
         # Decision: should we add this movie?
-        should_add = quality_score >= 6.0 and len(red_flags) <= 2
+        # Reject re-releases (old movies getting theatrical re-runs)
+        is_rerelease = metadata.get("is_rerelease", False)
+        if is_rerelease:
+            should_add = False
+            actual_year = metadata.get("actual_year")
+            red_flags.append(f"Re-release of {actual_year} film - not a new movie")
+        else:
+            should_add = quality_score >= 6.0 and len(red_flags) <= 2
 
         if self._debug:
             logger.info(f"  Quality Score: {quality_score:.1f}/10")
