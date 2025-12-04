@@ -65,7 +65,7 @@ Key environment variables (copy `.env.example` to `.env`):
 2. **Sync**: `SyncService` takes suggestions and adds them to Radarr (with duplicate detection)
 3. **Provider Pattern**: Factory creates provider instances based on config/CLI overrides
 
-### Smart Agentic Discovery (v1.6.2+)
+### Smart Agentic Discovery (v1.12.0+)
 
 The `smart_agentic` discovery mode uses an LLM orchestrator pattern:
 
@@ -112,3 +112,36 @@ Quality filtering criteria:
 - Snake_case for modules/functions, PascalCase for classes
 - Type hints required, Pydantic models for API payloads
 - No inline comments unless justified
+
+### Versioning and Releases
+
+**Single source of truth**: `pyproject.toml` contains the version.
+
+**Version alignment**:
+- Git tags: `v{VERSION}` (e.g., `v1.12.0`)
+- Docker images: `{VERSION}` (e.g., `1.12.0`) + `latest`
+
+**Release workflow** (use Makefile):
+```bash
+# Check current version
+make version
+
+# Bump version (choose one)
+make bump-patch    # 1.12.0 -> 1.12.1
+make bump-minor    # 1.12.0 -> 1.13.0
+make bump-major    # 1.12.0 -> 2.0.0
+
+# Commit the version bump
+git add pyproject.toml && git commit -m "chore: bump version to X.Y.Z"
+
+# Full release (tag + docker build + push)
+make release
+```
+
+**Makefile targets**:
+- `make version` - Show current version
+- `make bump-*` - Increment version in pyproject.toml
+- `make tag` - Create git tag (checks for clean working dir)
+- `make docker-build` - Build multi-arch Docker image
+- `make docker-push` - Build and push to Docker Hub
+- `make release` - Full pipeline: tag + build + push + tag latest

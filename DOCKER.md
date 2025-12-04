@@ -37,9 +37,9 @@ docker run --rm \
 mlamp/radarr-manager:latest
 
 # Specific version (note: no 'v' prefix in Docker tags)
-mlamp/radarr-manager:1.6.2
-mlamp/radarr-manager:1.6.1
-mlamp/radarr-manager:1.6.0
+mlamp/radarr-manager:1.12.0
+mlamp/radarr-manager:1.11.0
+mlamp/radarr-manager:1.9.0
 
 # Older version tags
 mlamp/radarr-manager:1.5.1
@@ -112,7 +112,7 @@ docker run --rm \
 - Detects red flags (poor ratings, low votes, score gaps)
 - Filters out movies scoring < 6.0 or with > 2 red flags
 
-### Smart Agentic Discovery (v1.6.2+)
+### Smart Agentic Discovery (v1.12.0+)
 
 Use the LLM orchestrator with specialized agents for highest quality mainstream movie discovery:
 
@@ -120,11 +120,11 @@ Use the LLM orchestrator with specialized agents for highest quality mainstream 
 docker run --rm \
   --env-file /mnt/user/appdata/radarr-manager/.env \
   --network host \
-  mlamp/radarr-manager:1.6.2 \
+  mlamp/radarr-manager:1.12.0 \
   sync --discovery-mode smart_agentic --limit 10 --no-dry-run --debug
 ```
 
-**Smart Agentic Features (v1.6.2+):**
+**Smart Agentic Features (v1.12.0+):**
 - GPT-4o orchestrator coordinates specialized agents
 - Fetches from IMDB moviemeter (top 10/50/100 most popular)
 - Web search for current box office and trending movies
@@ -448,21 +448,21 @@ version: '3.8'
 
 services:
   radarr-manager:
-    image: mlamp/radarr-manager:1.6.2
+    image: mlamp/radarr-manager:1.12.0
     network_mode: host
     env_file: /mnt/user/appdata/radarr-manager/.env
     command: sync --limit 10 --no-dry-run --deep-analysis --debug
     restart: unless-stopped
 ```
 
-### With Smart Agentic Discovery (v1.6.2+)
+### With Smart Agentic Discovery (v1.12.0+)
 
 ```yaml
 version: '3.8'
 
 services:
   radarr-manager:
-    image: mlamp/radarr-manager:1.6.2
+    image: mlamp/radarr-manager:1.12.0
     network_mode: host
     env_file: /mnt/user/appdata/radarr-manager/.env
     command: sync --discovery-mode smart_agentic --limit 10 --no-dry-run --debug
@@ -724,14 +724,14 @@ docker buildx build \
 docker run --rm \
   --env-file /mnt/user/appdata/radarr-manager/.env \
   --network host \
-  mlamp/radarr-manager:1.6.2 \
+  mlamp/radarr-manager:1.12.0 \
   sync --limit 10 --no-dry-run --deep-analysis --debug
 
 # With smart agentic discovery (recommended for highest quality)
 docker run --rm \
   --env-file /mnt/user/appdata/radarr-manager/.env \
   --network host \
-  mlamp/radarr-manager:1.6.2 \
+  mlamp/radarr-manager:1.12.0 \
   sync --discovery-mode smart_agentic --limit 10 --no-dry-run --debug
 ```
 

@@ -9,7 +9,7 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
   - Scrapes Rotten Tomatoes (theaters + streaming) and IMDB moviemeter
   - Supports Crawl4AI (default) or Firecrawl as scraping backends
   - Merges scraped titles with OpenAI suggestions for best coverage
-- 🧠 **Smart Agentic Discovery Mode (v1.6.2+)**: LLM orchestrator coordinates specialized agents
+- 🧠 **Smart Agentic Discovery Mode (v1.12.0+)**: LLM orchestrator coordinates specialized agents
   - GPT-4o orchestrator reasons about which agents to call and in what order
   - Fetches from IMDB moviemeter (top 10/50/100 most popular)
   - Web search for current box office and trending movies
@@ -450,7 +450,7 @@ radarr-manager discover --discovery-mode hybrid --limit 20 --debug
 radarr-manager sync --discovery-mode hybrid --limit 15 --no-dry-run
 ```
 
-**Smart agentic discovery (v1.6.2+)** - highest quality results:
+**Smart agentic discovery (v1.12.0+)** - highest quality results:
 ```bash
 # Start Crawl4AI container (required for smart_agentic mode)
 docker compose -f docker-compose.dev.yml up -d
