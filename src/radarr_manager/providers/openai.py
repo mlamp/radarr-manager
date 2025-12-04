@@ -152,7 +152,7 @@ class OpenAIProvider(MovieDiscoveryProvider):
             "Use web_search to find movies from these sources: "
             "(1) https://www.rottentomatoes.com/browse/movies_in_theaters - currently in theaters, "
             "(2) https://www.rottentomatoes.com/browse/movies_at_home/sort:popular - trending streaming/home releases, "
-            "(3) https://www.imdb.com/chart/moviemeter/ - IMDb most popular movies right now. "
+            "(3) https://www.imdb.com/search/title/?title_type=feature&moviemeter=,50 - IMDb most popular movies right now."
             "Also search IMDb release calendars and movie news sites. "
             "Include theatrical releases, blockbusters, franchise films, prestige films, AND high-quality streaming releases. "
             "PRIORITIZE movies featuring Academy Award winners/nominees. "

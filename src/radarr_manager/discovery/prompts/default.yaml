@@ -13,10 +13,10 @@ sources:
     parser: rt_theaters
     priority: 1
 
-  # IMDB Moviemeter - dynamically sized based on limit
+  # IMDB Moviemeter - top trending movies by popularity rank
   - type: scrape
-    url: https://www.imdb.com/search/title/?title_type=feature&moviemeter=1,{fetch_limit}&count={fetch_limit}
-    parser: imdb_meter
+    url: https://www.imdb.com/search/title/?title_type=feature&moviemeter=,{fetch_limit}
+    parser: imdb_moviemeter
     priority: 2
 
   # LLM web search for additional coverage

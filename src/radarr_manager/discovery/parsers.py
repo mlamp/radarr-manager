@@ -149,9 +149,10 @@ class IMDBMeterParser(ContentParser):
                     )
                 )
 
-        # Search page pattern: ### [N. Title](url)
+        # Search page pattern: N. [Title](url) - from /search/title/ pages
+        # Format: "1. [Zootopia 2](https://www.imdb.com/title/tt14948432/?ref_=sr_i_1)"
         search_pattern = re.compile(
-            r"###\s*\[(\d+)\.\s*([^\]]{2,80})\]" r"\(https?://www\.imdb\.com/title/tt\d+",
+            r"(\d+)\.\s*\[([^\]]{2,80})\]\(https?://www\.imdb\.com/title/tt\d+",
         )
 
         for match in search_pattern.finditer(content):

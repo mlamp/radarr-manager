@@ -59,7 +59,10 @@ class ScraperProvider(ABC):
                 "https://www.rottentomatoes.com/browse/movies_at_home/sort:popular",
                 "rt_home",
             ),
-            ("https://www.imdb.com/chart/moviemeter/", "imdb_meter"),
+            (
+                "https://www.imdb.com/search/title/?title_type=feature&moviemeter=,50",
+                "imdb_moviemeter",
+            ),
         ]
 
         all_movies: list[ScrapedMovie] = []
