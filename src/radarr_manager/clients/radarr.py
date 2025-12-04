@@ -7,7 +7,8 @@ from typing import Any
 import httpx
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-DEFAULT_TIMEOUT = 20.0
+DEFAULT_TIMEOUT = 30.0
+LIST_MOVIES_TIMEOUT = 120.0  # Large libraries can take a while
 USER_AGENT = "radarr-manager/0.1.0"
 
 
@@ -98,7 +99,10 @@ class RadarrClient:
         return await self._get_json("/qualityprofile")
 
     async def list_movies(self) -> list[dict[str, Any]]:
-        return await self._get_json("/movie")
+        # Use longer timeout for large libraries
+        response = await self._client.get("/movie", timeout=LIST_MOVIES_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
 
     async def ensure_movie(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
         async for attempt in _retry_policy():
