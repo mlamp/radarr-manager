@@ -201,6 +201,10 @@ class DeepAnalysisService:
         if not any([imdb_rating, rt_critics, rt_audience, metacritic]):
             flags.append("No ratings available - unreleased or unreviewed")
 
+        # Critics-only with no audience data - unreliable for general appeal
+        if rt_critics is not None and rt_audience is None and (not imdb_votes or imdb_votes < 1000):
+            flags.append("Critics-only rating - no audience data to confirm general appeal")
+
         return flags
 
     def _identify_strengths(
@@ -310,6 +314,17 @@ class DeepAnalysisService:
 
         # Calculate weighted average
         quality_score = sum(score * weight for _, score, weight in normalized_scores)
+
+        # Penalize sparse data - if we have fewer than 2 rating sources, cap the max score
+        # A movie with only critics score shouldn't be "highly recommended"
+        num_sources = len(scores)
+        if num_sources == 1:
+            quality_score = min(quality_score, 6.5)  # Cap at "GOOD" level
+        elif num_sources == 2:
+            # If missing audience data entirely, also cap
+            has_audience_data = rt_audience is not None or (imdb_votes and imdb_votes >= 1000)
+            if not has_audience_data:
+                quality_score = min(quality_score, 7.0)  # Cap at "RECOMMENDED" level
 
         # Apply penalties for red flags
         penalty = min(len(red_flags) * 0.5, 3.0)
