@@ -128,7 +128,7 @@ class DeepAnalysisService:
         red_flags = self._detect_red_flags(movie, metadata, is_major_franchise)
         strengths = self._identify_strengths(movie, metadata, is_major_franchise)
         quality_score = self._calculate_quality_score(
-            metadata, red_flags, strengths, is_major_franchise
+            metadata, red_flags, strengths, is_major_franchise, movie.confidence
         )
         rating_details = self._build_rating_details(metadata)
 
@@ -273,6 +273,7 @@ class DeepAnalysisService:
         red_flags: list[str],
         strengths: list[str],
         is_major_franchise: bool,
+        confidence: float = 0.5,
     ) -> float:
         """
         Calculate overall quality score (0-10) based on multi-source ratings.
@@ -311,9 +312,20 @@ class DeepAnalysisService:
             scores.append(("imdb", imdb_rating, weight))
 
         if not scores:
-            # No ratings available - use provider confidence as fallback
-            # Major franchises get benefit of the doubt
-            return 6.0 if is_major_franchise else 5.0
+            # No ratings available - use discovery confidence as primary signal
+            # This helps identify unreleased major films vs obscure unknowns
+            if confidence >= 0.85:
+                base_score = 6.5  # High confidence = likely quality release
+            elif confidence >= 0.80:
+                base_score = 6.0  # Good confidence = benefit of doubt
+            elif confidence >= 0.70:
+                base_score = 5.5  # Moderate confidence = borderline
+            else:
+                base_score = 5.0  # Low confidence = skip
+            # Major franchises get additional boost
+            if is_major_franchise:
+                base_score = min(10, base_score + 0.5)
+            return base_score
 
         # Normalize weights to sum to 1.0
         total_weight = sum(weight for _, _, weight in scores)
@@ -326,7 +338,23 @@ class DeepAnalysisService:
         # A movie with only critics score shouldn't be "highly recommended"
         num_sources = len(scores)
         if num_sources == 1:
-            quality_score = min(quality_score, 6.5)  # Cap at "GOOD" level
+            # Single source requires extra scrutiny
+            # If only IMDb with very low votes, don't trust it at all
+            only_imdb_low_votes = (
+                imdb_rating is not None
+                and rt_critics is None
+                and metacritic is None
+                and imdb_votes < 500
+            )
+            if only_imdb_low_votes:
+                # Very low vote count = unreliable, treat like no ratings
+                # Use confidence-based scoring instead
+                if confidence >= 0.85:
+                    quality_score = min(quality_score, 6.0)
+                else:
+                    quality_score = min(quality_score, 5.5)  # Will skip
+            else:
+                quality_score = min(quality_score, 6.5)  # Cap at "GOOD" level
         elif num_sources == 2:
             # If missing audience data entirely, also cap
             has_audience_data = rt_audience is not None or (imdb_votes and imdb_votes >= 1000)
