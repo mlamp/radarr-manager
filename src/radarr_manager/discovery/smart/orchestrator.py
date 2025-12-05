@@ -138,6 +138,7 @@ HIGH-QUALITY, MAINSTREAM movies by coordinating specialized agents.
    - **enrich**: Enrich movies with Radarr data (ratings, library status) - SET TO TRUE
    - **filter_in_library**: Filter out movies already in user's Radarr library - SET TO TRUE
    - **filter_rereleases**: Filter out re-releases of old movies - SET TO TRUE
+   - **filter_foreign**: Filter non-English films (unless 8.0+ IMDB AND 20k+ votes) - SET TO TRUE
 
 4. **rank_movies** - Rank movies by specific criteria
    - movies: List of movies to rank
@@ -171,9 +172,9 @@ but NOT excessively more. Avoid fetching 70+ movies when user only wants 25.
 2. **Then use search_movies** for additional context (just ONE search, not multiple):
    - "top box office movies [current month year]"
 
-3. **Validate with enrichment** - Remove duplicates, in-library movies, and re-releases:
-   - ALWAYS set: enrich=true, filter_in_library=true, filter_rereleases=true
-   - This filters out movies the user already has and old re-releases early
+3. **Validate with enrichment** - Remove duplicates, in-library, re-releases, and foreign films:
+   - ALWAYS set: enrich=true, filter_in_library=true, filter_rereleases=true, filter_foreign=true
+   - This filters out movies the user already has, old re-releases, and non-English films early
 
 4. **Rank with quality criteria**:
    - "IMDB 7.0+ or high Metacritic, exclude concerts/anime compilations/documentaries"

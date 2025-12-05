@@ -85,6 +85,7 @@ class SmartValidatorAgent(SmartAgent):
             enrich: Enrich movies with Radarr lookup data (default: False)
             filter_in_library: Filter out movies already in Radarr library (default: False)
             filter_rereleases: Filter out re-releases of old movies (default: False)
+            filter_foreign: Filter out non-English films unless exceptional (default: False)
 
         Returns:
             AgentReport with validated movies and rejection breakdown
@@ -97,6 +98,7 @@ class SmartValidatorAgent(SmartAgent):
         enrich = kwargs.get("enrich", False)
         filter_in_library = kwargs.get("filter_in_library", False)
         filter_rereleases = kwargs.get("filter_rereleases", False)
+        filter_foreign = kwargs.get("filter_foreign", False)
 
         if not movies_data:
             return self._create_failure_report("No movies provided for validation")
@@ -154,25 +156,33 @@ class SmartValidatorAgent(SmartAgent):
                     f"Deduplication: merged {duplicates_merged}, {len(valid_movies)} unique"
                 )
 
-            # Phase 3: Enrichment and library/re-release filtering
+            # Phase 3: Enrichment and library/re-release/foreign filtering
             in_library_count = 0
             rerelease_count = 0
+            foreign_count = 0
             if enrich and self._has_radarr and valid_movies:
-                valid_movies, in_library_count, rerelease_count, enrichment_rejected = (
-                    await self._enrich_and_filter(
-                        valid_movies,
-                        filter_in_library=filter_in_library,
-                        filter_rereleases=filter_rereleases,
-                    )
+                (
+                    valid_movies,
+                    in_library_count,
+                    rerelease_count,
+                    foreign_count,
+                    enrichment_rejected,
+                ) = await self._enrich_and_filter(
+                    valid_movies,
+                    filter_in_library=filter_in_library,
+                    filter_rereleases=filter_rereleases,
+                    filter_foreign=filter_foreign,
                 )
                 rejected_movies.extend(enrichment_rejected)
                 if in_library_count > 0:
                     rejection_breakdown["in_library"] = in_library_count
                 if rerelease_count > 0:
                     rejection_breakdown["rerelease"] = rerelease_count
+                if foreign_count > 0:
+                    rejection_breakdown["foreign"] = foreign_count
                 self._log(
                     f"Enrichment: {in_library_count} in library, {rerelease_count} re-releases, "
-                    f"{len(valid_movies)} remaining"
+                    f"{foreign_count} foreign, {len(valid_movies)} remaining"
                 )
 
             # Build report sections
@@ -186,7 +196,8 @@ class SmartValidatorAgent(SmartAgent):
                         f"- Filter collections: {filter_collections}\n"
                         f"- Enrich from Radarr: {enrich}\n"
                         f"- Filter in-library: {filter_in_library}\n"
-                        f"- Filter re-releases: {filter_rereleases}"
+                        f"- Filter re-releases: {filter_rereleases}\n"
+                        f"- Filter foreign: {filter_foreign}"
                     ),
                 ),
             ]
@@ -235,6 +246,7 @@ class SmartValidatorAgent(SmartAgent):
                     "duplicates_merged": duplicates_merged,
                     "in_library_filtered": in_library_count,
                     "rereleases_filtered": rerelease_count,
+                    "foreign_filtered": foreign_count,
                     "rejection_breakdown": rejection_breakdown,
                 },
                 execution_time_ms=timer.elapsed_ms,
@@ -250,12 +262,15 @@ class SmartValidatorAgent(SmartAgent):
         movies: list[MovieData],
         filter_in_library: bool = True,
         filter_rereleases: bool = True,
-    ) -> tuple[list[MovieData], int, int, list[MovieData]]:
+        filter_foreign: bool = False,
+    ) -> tuple[list[MovieData], int, int, int, list[MovieData]]:
         """
         Enrich movies with Radarr lookup data and filter based on criteria.
 
+        Foreign films are filtered unless they're exceptional (IMDB 8.0+ AND 20k+ votes).
+
         Returns:
-            Tuple of (valid_movies, in_library_count, rerelease_count, rejected_movies)
+            Tuple of (valid_movies, in_library_count, rerelease_count, foreign_count, rejected)
         """
         from radarr_manager.clients.radarr import RadarrClient
 
@@ -263,6 +278,7 @@ class SmartValidatorAgent(SmartAgent):
         rejected: list[MovieData] = []
         in_library_count = 0
         rerelease_count = 0
+        foreign_count = 0
         current_year = datetime.now().year
 
         async with RadarrClient(
@@ -285,6 +301,13 @@ class SmartValidatorAgent(SmartAgent):
                         and actual_year < (current_year - RE_RELEASE_THRESHOLD_YEARS)
                     )
 
+                    # Extract original language
+                    original_language = lookup.get("originalLanguage", {})
+                    original_language_name = (
+                        original_language.get("name") if original_language else None
+                    )
+                    is_foreign = original_language_name and original_language_name != "English"
+
                     # Update movie metadata with enrichment data
                     movie.metadata["tmdb_id"] = lookup.get("tmdbId")
                     movie.metadata["imdb_id"] = lookup.get("imdbId")
@@ -292,15 +315,21 @@ class SmartValidatorAgent(SmartAgent):
                     movie.metadata["in_library"] = in_library
                     movie.metadata["actual_year"] = actual_year
                     movie.metadata["is_rerelease"] = is_rerelease
+                    movie.metadata["original_language"] = original_language_name
+                    movie.metadata["is_foreign"] = is_foreign
 
                     # Extract ratings
                     ratings = lookup.get("ratings", {})
                     imdb_data = ratings.get("imdb", {})
+                    imdb_rating = None
+                    imdb_votes = 0
                     if imdb_data:
                         if imdb_data.get("value"):
-                            movie.ratings["imdb_rating"] = round(imdb_data["value"], 1)
+                            imdb_rating = round(imdb_data["value"], 1)
+                            movie.ratings["imdb_rating"] = imdb_rating
                         if imdb_data.get("votes"):
-                            movie.ratings["imdb_votes"] = imdb_data["votes"]
+                            imdb_votes = imdb_data["votes"]
+                            movie.ratings["imdb_votes"] = imdb_votes
 
                     rt_data = ratings.get("rottenTomatoes", {})
                     if rt_data and rt_data.get("value"):
@@ -309,6 +338,13 @@ class SmartValidatorAgent(SmartAgent):
                     mc_data = ratings.get("metacritic", {})
                     if mc_data and mc_data.get("value"):
                         movie.metadata["metacritic_score"] = int(mc_data["value"])
+
+                    # Check if foreign film is exceptional (8.0+ IMDB AND 20k+ votes)
+                    is_exceptional_foreign = (
+                        imdb_rating is not None
+                        and imdb_rating >= 8.0
+                        and imdb_votes >= 20000
+                    )
 
                     # Filter based on criteria
                     if filter_in_library and in_library:
@@ -323,6 +359,14 @@ class SmartValidatorAgent(SmartAgent):
                         rerelease_count += 1
                         rejected.append(movie)
                         self._log(f"Filtered (re-release from {actual_year}): {movie.title}")
+                    elif filter_foreign and is_foreign and not is_exceptional_foreign:
+                        movie.is_valid = False
+                        movie.rejection_reason = "foreign"
+                        foreign_count += 1
+                        rejected.append(movie)
+                        self._log(
+                            f"Filtered (foreign '{original_language_name}'): {movie.title}"
+                        )
                     else:
                         valid.append(movie)
 
@@ -330,7 +374,7 @@ class SmartValidatorAgent(SmartAgent):
                     logger.warning(f"Failed to enrich {movie.title}: {exc}")
                     valid.append(movie)
 
-        return valid, in_library_count, rerelease_count, rejected
+        return valid, in_library_count, rerelease_count, foreign_count, rejected
 
     def _parse_input_movies(self, movies_data: list[Any]) -> list[MovieData]:
         """Parse input movies from various formats."""
@@ -445,6 +489,11 @@ class SmartValidatorAgent(SmartAgent):
                 "filter_rereleases": {
                     "type": "boolean",
                     "description": "Filter out re-releases of old movies (requires enrich=true)",
+                    "default": False,
+                },
+                "filter_foreign": {
+                    "type": "boolean",
+                    "description": "Filter non-English films unless exceptional (8.0+, 20k+ votes)",
                     "default": False,
                 },
             },
