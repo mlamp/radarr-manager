@@ -133,6 +133,7 @@ def _build_smart_agentic_provider(
     - A reasoning LLM (GPT-4/Claude) orchestrates discovery
     - Specialized agents (fetch, search, validate, rank) do the work
     - Agents communicate via structured markdown reports
+    - ValidatorAgent can enrich and filter via Radarr (early filtering)
     """
     # Determine orchestrator model - use a smarter model for reasoning
     orchestrator_model = settings.openai_model or "gpt-4o"
@@ -151,6 +152,8 @@ def _build_smart_agentic_provider(
         agent_model=agent_model,
         scraper_api_url=settings.scraper_api_url or "http://localhost:11235",
         scraper_api_key=settings.scraper_api_key,
+        radarr_base_url=settings.radarr_base_url,
+        radarr_api_key=settings.radarr_api_key,
         discovery_prompt=prompt,
         debug=debug,
     )

@@ -78,6 +78,10 @@ class SmartOrchestratorConfig:
     scraper_api_url: str = "http://localhost:11235"
     scraper_api_key: str | None = None
 
+    # Radarr (for early enrichment/filtering in ValidatorAgent)
+    radarr_base_url: str | None = None
+    radarr_api_key: str | None = None
+
     # Limits
     max_iterations: int = 5  # Max reasoning loops
     max_movies: int = 50
@@ -85,6 +89,10 @@ class SmartOrchestratorConfig:
     @property
     def has_orchestrator_llm(self) -> bool:
         return bool(self.orchestrator_api_key)
+
+    @property
+    def has_radarr(self) -> bool:
+        return bool(self.radarr_base_url and self.radarr_api_key)
 
 
 @dataclass
@@ -122,11 +130,14 @@ HIGH-QUALITY, MAINSTREAM movies by coordinating specialized agents.
    - max_results: Maximum results
    - region: Region for results (default: US)
 
-3. **validate_movies** - Validate and filter movie lists
+3. **validate_movies** - Validate, enrich, and filter movie lists
    - movies: List of movies to validate
    - deduplicate: Merge duplicates (default: true)
    - min_confidence: Minimum confidence threshold
    - filter_tv_shows: Remove TV show patterns
+   - **enrich**: Enrich movies with Radarr data (ratings, library status) - SET TO TRUE
+   - **filter_in_library**: Filter out movies already in user's Radarr library - SET TO TRUE
+   - **filter_rereleases**: Filter out re-releases of old movies - SET TO TRUE
 
 4. **rank_movies** - Rank movies by specific criteria
    - movies: List of movies to rank
@@ -160,10 +171,12 @@ but NOT excessively more. Avoid fetching 70+ movies when user only wants 25.
 2. **Then use search_movies** for additional context (just ONE search, not multiple):
    - "top box office movies [current month year]"
 
-3. **Validate** - Remove duplicates and invalid entries
+3. **Validate with enrichment** - Remove duplicates, in-library movies, and re-releases:
+   - ALWAYS set: enrich=true, filter_in_library=true, filter_rereleases=true
+   - This filters out movies the user already has and old re-releases early
 
 4. **Rank with quality criteria**:
-   - "IMDB 7.0+ or high Metacritic, exclude concerts/anime compilations/documentaries/re-releases"
+   - "IMDB 7.0+ or high Metacritic, exclude concerts/anime compilations/documentaries"
 """
 
 
@@ -200,6 +213,8 @@ class SmartOrchestrator:
                 debug=debug,
             ),
             "validate_movies": SmartValidatorAgent(
+                radarr_base_url=config.radarr_base_url,
+                radarr_api_key=config.radarr_api_key,
                 debug=debug,
             ),
             "rank_movies": SmartRankerAgent(

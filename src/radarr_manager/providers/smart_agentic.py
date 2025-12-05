@@ -66,6 +66,9 @@ class SmartAgenticProvider(MovieDiscoveryProvider):
         # Scraper
         scraper_api_url: str = "http://localhost:11235",
         scraper_api_key: str | None = None,
+        # Radarr (for early enrichment/filtering)
+        radarr_base_url: str | None = None,
+        radarr_api_key: str | None = None,
         # Custom prompt for discovery
         discovery_prompt: str | None = None,
         # Settings
@@ -83,6 +86,8 @@ class SmartAgenticProvider(MovieDiscoveryProvider):
             agent_model: Model for agents (default: gpt-4o-mini, cheaper)
             scraper_api_url: Crawl4AI API URL
             scraper_api_key: Crawl4AI API key
+            radarr_base_url: Radarr API URL for early enrichment/filtering
+            radarr_api_key: Radarr API key
             discovery_prompt: Optional custom prompt for discovery
             max_iterations: Maximum orchestrator reasoning iterations
             debug: Enable debug logging
@@ -102,6 +107,8 @@ class SmartAgenticProvider(MovieDiscoveryProvider):
             agent_model=agent_model,
             scraper_api_url=scraper_api_url,
             scraper_api_key=scraper_api_key,
+            radarr_base_url=radarr_base_url,
+            radarr_api_key=radarr_api_key,
             max_iterations=max_iterations,
         )
 
@@ -112,6 +119,8 @@ class SmartAgenticProvider(MovieDiscoveryProvider):
             logger.info(f"  - Orchestrator: {orchestrator_model} ({orchestrator_provider})")
             logger.info(f"  - Agent model: {agent_model}")
             logger.info(f"  - Scraper: {scraper_api_url}")
+            if radarr_base_url:
+                logger.info(f"  - Radarr: {radarr_base_url} (early filtering enabled)")
 
     async def discover(
         self,
@@ -190,6 +199,8 @@ class SmartAgenticProvider(MovieDiscoveryProvider):
             agent_model=self._orchestrator._config.agent_model,
             scraper_api_url=self._orchestrator._config.scraper_api_url,
             scraper_api_key=self._orchestrator._config.scraper_api_key,
+            radarr_base_url=self._orchestrator._config.radarr_base_url,
+            radarr_api_key=self._orchestrator._config.radarr_api_key,
             discovery_prompt=prompt,
             max_iterations=self._orchestrator._config.max_iterations,
             debug=self._debug,

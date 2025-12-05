@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from radarr_manager.discovery.smart.agents.base import SmartAgent, TimedExecution
@@ -19,6 +20,8 @@ from radarr_manager.discovery.validation import (
 
 logger = logging.getLogger(__name__)
 
+RE_RELEASE_THRESHOLD_YEARS = 2
+
 
 class SmartValidatorAgent(SmartAgent):
     """
@@ -28,6 +31,9 @@ class SmartValidatorAgent(SmartAgent):
     - Validates movie titles using rule-based filtering
     - Detects duplicates and merges sources
     - Filters based on configurable criteria
+    - Enriches movies via Radarr lookup (optional)
+    - Filters out movies already in library (optional)
+    - Filters out re-releases (optional)
     - Returns structured report with valid/rejected movies
 
     Example tool call from orchestrator:
@@ -38,7 +44,10 @@ class SmartValidatorAgent(SmartAgent):
             "movies": [...],
             "deduplicate": true,
             "min_confidence": 0.5,
-            "filter_tv_shows": true
+            "filter_tv_shows": true,
+            "enrich": true,
+            "filter_in_library": true,
+            "filter_rereleases": true
         }
     }
     ```
@@ -49,14 +58,19 @@ class SmartValidatorAgent(SmartAgent):
     description = (
         "Validate and filter a list of movies. "
         "Removes invalid titles (TV shows, collections, duplicates), "
-        "merges duplicate entries, and applies quality filters."
+        "merges duplicate entries, and applies quality filters. "
+        "Can also enrich with Radarr data and filter out in-library movies and re-releases."
     )
 
     def __init__(
         self,
+        radarr_base_url: str | None = None,
+        radarr_api_key: str | None = None,
         debug: bool = False,
     ) -> None:
         super().__init__(debug)
+        self._radarr_base_url = radarr_base_url
+        self._radarr_api_key = radarr_api_key
 
     async def execute(self, **kwargs: Any) -> AgentReport:
         """
@@ -68,6 +82,9 @@ class SmartValidatorAgent(SmartAgent):
             min_confidence: Minimum confidence threshold (default: 0.0)
             filter_tv_shows: Filter out TV show patterns (default: True)
             filter_collections: Filter out collection/franchise titles (default: True)
+            enrich: Enrich movies with Radarr lookup data (default: False)
+            filter_in_library: Filter out movies already in Radarr library (default: False)
+            filter_rereleases: Filter out re-releases of old movies (default: False)
 
         Returns:
             AgentReport with validated movies and rejection breakdown
@@ -77,6 +94,9 @@ class SmartValidatorAgent(SmartAgent):
         min_confidence = kwargs.get("min_confidence", 0.0)
         filter_tv_shows = kwargs.get("filter_tv_shows", True)
         filter_collections = kwargs.get("filter_collections", True)
+        enrich = kwargs.get("enrich", False)
+        filter_in_library = kwargs.get("filter_in_library", False)
+        filter_rereleases = kwargs.get("filter_rereleases", False)
 
         if not movies_data:
             return self._create_failure_report("No movies provided for validation")
@@ -134,6 +154,27 @@ class SmartValidatorAgent(SmartAgent):
                     f"Deduplication: merged {duplicates_merged}, {len(valid_movies)} unique"
                 )
 
+            # Phase 3: Enrichment and library/re-release filtering
+            in_library_count = 0
+            rerelease_count = 0
+            if enrich and self._has_radarr and valid_movies:
+                valid_movies, in_library_count, rerelease_count, enrichment_rejected = (
+                    await self._enrich_and_filter(
+                        valid_movies,
+                        filter_in_library=filter_in_library,
+                        filter_rereleases=filter_rereleases,
+                    )
+                )
+                rejected_movies.extend(enrichment_rejected)
+                if in_library_count > 0:
+                    rejection_breakdown["in_library"] = in_library_count
+                if rerelease_count > 0:
+                    rejection_breakdown["rerelease"] = rerelease_count
+                self._log(
+                    f"Enrichment: {in_library_count} in library, {rerelease_count} re-releases, "
+                    f"{len(valid_movies)} remaining"
+                )
+
             # Build report sections
             sections = [
                 ReportSection(
@@ -142,7 +183,10 @@ class SmartValidatorAgent(SmartAgent):
                         f"- Deduplicate: {deduplicate}\n"
                         f"- Min confidence: {min_confidence}\n"
                         f"- Filter TV shows: {filter_tv_shows}\n"
-                        f"- Filter collections: {filter_collections}"
+                        f"- Filter collections: {filter_collections}\n"
+                        f"- Enrich from Radarr: {enrich}\n"
+                        f"- Filter in-library: {filter_in_library}\n"
+                        f"- Filter re-releases: {filter_rereleases}"
                     ),
                 ),
             ]
@@ -189,10 +233,104 @@ class SmartValidatorAgent(SmartAgent):
                     "valid_count": len(valid_movies),
                     "rejected_count": len(rejected_movies),
                     "duplicates_merged": duplicates_merged,
+                    "in_library_filtered": in_library_count,
+                    "rereleases_filtered": rerelease_count,
                     "rejection_breakdown": rejection_breakdown,
                 },
                 execution_time_ms=timer.elapsed_ms,
             )
+
+    @property
+    def _has_radarr(self) -> bool:
+        """Check if Radarr client can be created."""
+        return bool(self._radarr_base_url and self._radarr_api_key)
+
+    async def _enrich_and_filter(
+        self,
+        movies: list[MovieData],
+        filter_in_library: bool = True,
+        filter_rereleases: bool = True,
+    ) -> tuple[list[MovieData], int, int, list[MovieData]]:
+        """
+        Enrich movies with Radarr lookup data and filter based on criteria.
+
+        Returns:
+            Tuple of (valid_movies, in_library_count, rerelease_count, rejected_movies)
+        """
+        from radarr_manager.clients.radarr import RadarrClient
+
+        valid: list[MovieData] = []
+        rejected: list[MovieData] = []
+        in_library_count = 0
+        rerelease_count = 0
+        current_year = datetime.now().year
+
+        async with RadarrClient(
+            base_url=self._radarr_base_url,
+            api_key=self._radarr_api_key,
+        ) as client:
+            for movie in movies:
+                try:
+                    results = await client.lookup_movie(movie.title)
+                    if not results:
+                        valid.append(movie)
+                        continue
+
+                    lookup = results[0]
+                    radarr_id = lookup.get("id")
+                    in_library = radarr_id is not None
+                    actual_year = lookup.get("year")
+                    is_rerelease = (
+                        actual_year is not None
+                        and actual_year < (current_year - RE_RELEASE_THRESHOLD_YEARS)
+                    )
+
+                    # Update movie metadata with enrichment data
+                    movie.metadata["tmdb_id"] = lookup.get("tmdbId")
+                    movie.metadata["imdb_id"] = lookup.get("imdbId")
+                    movie.metadata["radarr_id"] = radarr_id
+                    movie.metadata["in_library"] = in_library
+                    movie.metadata["actual_year"] = actual_year
+                    movie.metadata["is_rerelease"] = is_rerelease
+
+                    # Extract ratings
+                    ratings = lookup.get("ratings", {})
+                    imdb_data = ratings.get("imdb", {})
+                    if imdb_data:
+                        if imdb_data.get("value"):
+                            movie.ratings["imdb_rating"] = round(imdb_data["value"], 1)
+                        if imdb_data.get("votes"):
+                            movie.ratings["imdb_votes"] = imdb_data["votes"]
+
+                    rt_data = ratings.get("rottenTomatoes", {})
+                    if rt_data and rt_data.get("value"):
+                        movie.metadata["rt_critics_score"] = int(rt_data["value"])
+
+                    mc_data = ratings.get("metacritic", {})
+                    if mc_data and mc_data.get("value"):
+                        movie.metadata["metacritic_score"] = int(mc_data["value"])
+
+                    # Filter based on criteria
+                    if filter_in_library and in_library:
+                        movie.is_valid = False
+                        movie.rejection_reason = "in_library"
+                        in_library_count += 1
+                        rejected.append(movie)
+                        self._log(f"Filtered (in library): {movie.title}")
+                    elif filter_rereleases and is_rerelease:
+                        movie.is_valid = False
+                        movie.rejection_reason = "rerelease"
+                        rerelease_count += 1
+                        rejected.append(movie)
+                        self._log(f"Filtered (re-release from {actual_year}): {movie.title}")
+                    else:
+                        valid.append(movie)
+
+                except Exception as exc:
+                    logger.warning(f"Failed to enrich {movie.title}: {exc}")
+                    valid.append(movie)
+
+        return valid, in_library_count, rerelease_count, rejected
 
     def _parse_input_movies(self, movies_data: list[Any]) -> list[MovieData]:
         """Parse input movies from various formats."""
@@ -293,6 +431,21 @@ class SmartValidatorAgent(SmartAgent):
                     "type": "boolean",
                     "description": "Filter out collection/franchise titles",
                     "default": True,
+                },
+                "enrich": {
+                    "type": "boolean",
+                    "description": "Enrich movies with Radarr lookup data (ratings, IDs)",
+                    "default": False,
+                },
+                "filter_in_library": {
+                    "type": "boolean",
+                    "description": "Filter out movies already in Radarr library",
+                    "default": False,
+                },
+                "filter_rereleases": {
+                    "type": "boolean",
+                    "description": "Filter out re-releases of old movies (requires enrich=true)",
+                    "default": False,
                 },
             },
             "required": ["movies"],
