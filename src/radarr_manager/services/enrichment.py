@@ -22,9 +22,7 @@ class EnrichmentService:
         self._client = client
         self._debug = debug
 
-    async def enrich_suggestions(
-        self, suggestions: list[MovieSuggestion]
-    ) -> list[MovieSuggestion]:
+    async def enrich_suggestions(self, suggestions: list[MovieSuggestion]) -> list[MovieSuggestion]:
         """
         Enrich movie suggestions with ratings data from Radarr lookup.
 
@@ -59,7 +57,9 @@ class EnrichmentService:
             metadata = self._extract_ratings(ratings, lookup)
 
             if self._debug:
-                imdb_str = f"{metadata.get('imdb_rating')}/10" if metadata.get("imdb_rating") else "N/A"
+                imdb_str = (
+                    f"{metadata.get('imdb_rating')}/10" if metadata.get("imdb_rating") else "N/A"
+                )
                 imdb_votes = metadata.get("imdb_votes") or 0
                 rt_critics = metadata.get("rt_critics_score")
                 rt_audience = metadata.get("rt_audience_score")
@@ -75,7 +75,8 @@ class EnrichmentService:
                 tag_str = f" [{', '.join(tags)}]" if tags else ""
                 logger.info(
                     f"[ENRICH] {movie.title}: IMDb {imdb_str} ({imdb_votes:,} votes), "
-                    f"RT {rt_critics or 'N/A'}%/{rt_audience or 'N/A'}%, MC {metacritic or 'N/A'}{tag_str}"
+                    f"RT {rt_critics or 'N/A'}%/{rt_audience or 'N/A'}%, "
+                    f"MC {metacritic or 'N/A'}{tag_str}"
                 )
 
             # Return new MovieSuggestion with enriched metadata
@@ -94,9 +95,7 @@ class EnrichmentService:
                 logger.warning(f"[ENRICH] Failed to enrich {movie.title}: {exc}")
             return movie
 
-    def _extract_ratings(
-        self, ratings: dict[str, Any], lookup: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _extract_ratings(self, ratings: dict[str, Any], lookup: dict[str, Any]) -> dict[str, Any]:
         """Extract ratings from Radarr's ratings structure."""
         # Check if movie is already in Radarr library
         # If 'id' is present and non-None, movie exists in library

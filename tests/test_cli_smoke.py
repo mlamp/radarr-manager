@@ -3,7 +3,6 @@ from typer.testing import CliRunner
 from radarr_manager import __version__
 from radarr_manager.cli.__main__ import app
 
-
 runner = CliRunner()
 
 

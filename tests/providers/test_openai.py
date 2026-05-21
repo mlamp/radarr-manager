@@ -1,24 +1,22 @@
 """Tests for OpenAI provider functionality."""
 
-import pytest
 import json
 from unittest.mock import AsyncMock, patch
-from datetime import datetime
 
-from radarr_manager.providers.openai import OpenAIProvider
-from radarr_manager.providers.base import ProviderError
+import pytest
+
 from radarr_manager.models import MovieSuggestion
+from radarr_manager.providers.base import ProviderError
+from radarr_manager.providers.openai import OpenAIProvider
 from tests.fixtures.openai_responses import (
-    VALID_JSON_RESPONSE,
     EMPTY_SUGGESTIONS_RESPONSE,
-    MALFORMED_JSON_RESPONSE,
-    RESPONSE_WITH_INVALID_DATES,
-    RESPONSE_WITH_MISSING_FIELDS,
-    MockOpenAIResponse,
-    VALID_JSON_RESPONSE_TEXT,
-    JSON_WITH_MARKDOWN_WRAPPER,
     JSON_WITH_EXTRA_TEXT,
+    JSON_WITH_MARKDOWN_WRAPPER,
+    MALFORMED_JSON_RESPONSE,
     NON_JSON_RESPONSE,
+    VALID_JSON_RESPONSE,
+    VALID_JSON_RESPONSE_TEXT,
+    MockOpenAIResponse,
 )
 
 

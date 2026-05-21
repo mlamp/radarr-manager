@@ -420,7 +420,9 @@ async def _run_sync(
 
         # Filter out movies already in library (detected during enrichment)
         in_library = [s for s in suggestions if s.metadata and s.metadata.get("in_library")]
-        not_in_library = [s for s in suggestions if not (s.metadata and s.metadata.get("in_library"))]
+        not_in_library = [
+            s for s in suggestions if not (s.metadata and s.metadata.get("in_library"))
+        ]
 
         if in_library and debug:
             typer.secho(
@@ -457,12 +459,18 @@ async def _run_sync(
                 imdb_rating = meta["imdb_rating"] if meta["imdb_rating"] is not None else "N/A"
                 imdb_votes = f"{meta['imdb_votes']:,}" if meta["imdb_votes"] else "0"
                 rt_critics = (
-                    f"{meta['rt_critics_score']}%" if meta["rt_critics_score"] is not None else "N/A"
+                    f"{meta['rt_critics_score']}%"
+                    if meta["rt_critics_score"] is not None
+                    else "N/A"
                 )
                 rt_audience = (
-                    f"{meta['rt_audience_score']}%" if meta["rt_audience_score"] is not None else "N/A"
+                    f"{meta['rt_audience_score']}%"
+                    if meta["rt_audience_score"] is not None
+                    else "N/A"
                 )
-                metacritic = meta["metacritic_score"] if meta["metacritic_score"] is not None else "N/A"
+                metacritic = (
+                    meta["metacritic_score"] if meta["metacritic_score"] is not None else "N/A"
+                )
 
                 typer.echo(
                     f"   Ratings: IMDb {imdb_rating} ({imdb_votes} votes) | "
@@ -474,7 +482,9 @@ async def _run_sync(
                     for flag in analysis.red_flags[:3]:
                         typer.echo(f"     • {flag}")
                 if analysis.strengths:
-                    typer.secho(f"   ✓ Strengths ({len(analysis.strengths)}):", fg=typer.colors.GREEN)
+                    typer.secho(
+                        f"   ✓ Strengths ({len(analysis.strengths)}):", fg=typer.colors.GREEN
+                    )
                     for strength in analysis.strengths[:3]:
                         typer.echo(f"     • {strength}")
                 if analysis.should_add:

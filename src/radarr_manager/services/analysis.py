@@ -38,14 +38,14 @@ REGIONAL_CINEMA_LANGUAGES = {
     "gujarati",
     "odia",
     "assamese",
-    "yoruba",      # Nollywood
-    "hausa",       # Nollywood
-    "igbo",        # Nollywood
+    "yoruba",  # Nollywood
+    "hausa",  # Nollywood
+    "igbo",  # Nollywood
     "thai",
     "indonesian",
     "vietnamese",
-    "tagalog",     # Filipino
-    "cebuano",     # Filipino
+    "tagalog",  # Filipino
+    "cebuano",  # Filipino
 }
 
 # Minimum IMDb rating required for regional cinema to be considered
@@ -195,7 +195,8 @@ class DeepAnalysisService:
                 should_add = False
                 rating_str = f"{imdb_rating}/10" if imdb_rating else "N/A"
                 red_flags.append(
-                    f"Regional cinema ({regional_lang}) - requires {REGIONAL_CINEMA_MIN_IMDB}+ IMDb, has {rating_str}"
+                    f"Regional cinema ({regional_lang}) - requires "
+                    f"{REGIONAL_CINEMA_MIN_IMDB}+ IMDb, has {rating_str}"
                 )
 
         if self._debug:

@@ -41,9 +41,7 @@ class Settings(BaseModel):
     # Scraper Configuration (for hybrid discovery mode)
     scraper_enabled: bool = Field(default=False, alias="SCRAPER_ENABLED")
     scraper_provider: str = Field(default="crawl4ai", alias="SCRAPER_PROVIDER")
-    scraper_api_url: str = Field(
-        default="http://localhost:11235", alias="SCRAPER_API_URL"
-    )
+    scraper_api_url: str = Field(default="http://localhost:11235", alias="SCRAPER_API_URL")
     scraper_api_key: str | None = Field(default=None, alias="SCRAPER_API_KEY")
     discovery_mode: str = Field(default="openai", alias="DISCOVERY_MODE")
 

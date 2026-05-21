@@ -10,7 +10,7 @@ Usage:
 """
 
 import asyncio
-import httpx
+
 from radarr_manager.clients.radarr import RadarrClient
 from radarr_manager.config import Settings
 
@@ -94,9 +94,9 @@ async def test_add_movie_the_matrix():
             print(f"   ❌ Error: {e}")
             return False
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("✅ All RadarrClient methods working correctly!")
-    print("="*60)
+    print("=" * 60)
     print("\n💡 The MCP server should now work without AttributeError exceptions.")
     print("   All required methods are implemented:\n")
     print("   - lookup_movie_by_tmdb(tmdb_id)")
@@ -114,5 +114,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")
         import traceback
+
         traceback.print_exc()
         exit(1)

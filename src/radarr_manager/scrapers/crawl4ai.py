@@ -82,9 +82,7 @@ class Crawl4AIScraper(ScraperProvider):
 
             if response.status_code != 200:
                 error_text = response.text[:500]
-                raise ScraperError(
-                    f"Crawl4AI API error {response.status_code}: {error_text}"
-                )
+                raise ScraperError(f"Crawl4AI API error {response.status_code}: {error_text}")
 
             data = response.json()
 
@@ -208,11 +206,7 @@ class Crawl4AIScraper(ScraperProvider):
             title = self._clean_title(title)
 
             # Only take top 100 movies
-            if (
-                rank <= 100
-                and self._is_valid_title(title)
-                and title.lower() not in seen_titles
-            ):
+            if rank <= 100 and self._is_valid_title(title) and title.lower() not in seen_titles:
                 seen_titles.add(title.lower())
                 movies.append(
                     ScrapedMovie(
@@ -225,9 +219,7 @@ class Crawl4AIScraper(ScraperProvider):
 
         # Fallback pattern: Simple markdown links to IMDB titles
         if not movies:
-            link_pattern = re.compile(
-                r"\[([^\]]{3,80})\]\(https?://www\.imdb\.com/title/tt\d+"
-            )
+            link_pattern = re.compile(r"\[([^\]]{3,80})\]\(https?://www\.imdb\.com/title/tt\d+")
             for match in link_pattern.finditer(content):
                 title = match.group(1).strip()
                 title = self._clean_title(title)

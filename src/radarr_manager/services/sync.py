@@ -33,7 +33,8 @@ class SyncService:
     ) -> SyncSummary:
         if not dry_run and (self._quality_profile_id is None or self._root_folder_path is None):
             raise RuntimeError(
-                "quality_profile_id and root_folder_path must be configured for live sync operations",
+                "quality_profile_id and root_folder_path must be configured "
+                "for live sync operations",
             )
 
         queued: list[str] = []

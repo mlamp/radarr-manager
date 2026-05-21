@@ -2,18 +2,20 @@
 
 import os
 import tempfile
+import tomllib
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
+
 import pytest
 
 from radarr_manager.config.settings import (
     Settings,
     SettingsError,
     SettingsLoadResult,
-    load_settings,
+    _collect_env_overrides,
     _determine_config_path,
     _flatten_toml,
-    _collect_env_overrides,
+    load_settings,
 )
 
 
@@ -555,8 +557,8 @@ class TestLoadSettings:
 
         try:
             with patch.dict(os.environ, {}, clear=True):
-                # Should raise an exception due to malformed TOML
-                with pytest.raises(Exception):  # tomllib will raise a parsing error
+                # Malformed TOML — tomllib raises TOMLDecodeError.
+                with pytest.raises(tomllib.TOMLDecodeError):
                     load_settings(config_path=config_path, load_env=False)
         finally:
             config_path.unlink()

@@ -1,8 +1,8 @@
 import pytest
 
 from radarr_manager.config import Settings
-from radarr_manager.providers.factory import build_provider
 from radarr_manager.providers.base import ProviderError
+from radarr_manager.providers.factory import build_provider
 from radarr_manager.providers.openai import OpenAIProvider
 from radarr_manager.providers.static import StaticListProvider
 

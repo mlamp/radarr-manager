@@ -5,18 +5,19 @@ including proper error handling and response formats. Tests cover the
 new RadarrClient methods (get_movie_by_tmdb, lookup_movie_by_tmdb, etc.).
 """
 
-import pytest
-import httpx
 from unittest.mock import AsyncMock, patch
 
+import httpx
+import pytest
+
+from radarr_manager.config.settings import Settings
 from radarr_manager.mcp.server import (
     _add_movie,
-    _search_movie,
     _analyze_quality,
     _discover_movies,
+    _search_movie,
     _sync_movies,
 )
-from radarr_manager.config.settings import Settings
 
 
 @pytest.mark.integration
@@ -97,12 +98,8 @@ class TestMCPToolsE2E:
             # Mock get_movie_by_tmdb to show not in library
             mock_instance.get_movie_by_tmdb.return_value = None
 
-            mock_instance.list_root_folders.return_value = [
-                {"path": "/data/movies", "id": 1}
-            ]
-            mock_instance.list_quality_profiles.return_value = [
-                {"name": "HD-1080p", "id": 1}
-            ]
+            mock_instance.list_root_folders.return_value = [{"path": "/data/movies", "id": 1}]
+            mock_instance.list_quality_profiles.return_value = [{"name": "HD-1080p", "id": 1}]
             mock_instance.ensure_movie.return_value = {
                 "id": 123,
                 "title": "The Matrix",

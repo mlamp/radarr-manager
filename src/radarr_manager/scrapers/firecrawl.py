@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
 
 import httpx
 
@@ -84,9 +83,7 @@ class FirecrawlScraper(ScraperProvider):
 
             if response.status_code != 200:
                 error_text = response.text[:500]
-                raise ScraperError(
-                    f"Firecrawl API error {response.status_code}: {error_text}"
-                )
+                raise ScraperError(f"Firecrawl API error {response.status_code}: {error_text}")
 
             data = response.json()
 
@@ -199,8 +196,7 @@ class FirecrawlScraper(ScraperProvider):
                     title = match.group(1).strip()
                     year = int(match.group(2))
                     if len(title) > 2 and not any(
-                        skip in title.lower()
-                        for skip in ["rank", "title", "year", "rating"]
+                        skip in title.lower() for skip in ["rank", "title", "year", "rating"]
                     ):
                         movies.append(
                             ScrapedMovie(

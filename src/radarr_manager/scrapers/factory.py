@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from radarr_manager.scrapers.base import ScraperError, ScraperProvider
 
-
 # Default API URLs for each provider
 DEFAULT_URLS = {
     "crawl4ai": "http://localhost:11235",
@@ -55,8 +54,7 @@ def build_scraper(
         )
 
     raise ScraperError(
-        f"Unsupported scraper provider: {provider}. "
-        "Valid options: crawl4ai, firecrawl"
+        f"Unsupported scraper provider: {provider}. " "Valid options: crawl4ai, firecrawl"
     )
 
 

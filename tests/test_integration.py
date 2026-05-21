@@ -1,17 +1,19 @@
 """Integration tests that require live services."""
 
-import pytest
-import os
 import asyncio
+import os
 from datetime import date
 
+import httpx
+import pytest
+
 from radarr_manager.clients.radarr import RadarrClient
-from radarr_manager.providers.openai import OpenAIProvider
-from radarr_manager.providers.factory import build_provider
-from radarr_manager.services.discovery import DiscoveryService
-from radarr_manager.services.sync import SyncService
 from radarr_manager.config.settings import Settings, load_settings
 from radarr_manager.models import MovieSuggestion
+from radarr_manager.providers.factory import build_provider
+from radarr_manager.providers.openai import OpenAIProvider
+from radarr_manager.services.discovery import DiscoveryService
+from radarr_manager.services.sync import SyncService
 
 
 @pytest.mark.integration
@@ -209,8 +211,14 @@ class TestProviderIntegration:
             cache_ttl_hours=1,
         )
 
-        with pytest.raises(Exception):
-            # Should fail with authentication error
+        # OpenAIProvider catches the underlying openai/httpx exception and
+        # re-raises as ProviderError. We assert on that surface (plus the raw
+        # types in case the wrapping changes) — specific enough for ruff B017.
+        import openai
+
+        from radarr_manager.providers.base import ProviderError
+
+        with pytest.raises((ProviderError, httpx.HTTPError, openai.OpenAIError)):
             await provider.discover(limit=1)
 
 

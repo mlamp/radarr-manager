@@ -1,18 +1,19 @@
 """Tests for sync service functionality."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 from datetime import date
-import httpx
+from unittest.mock import AsyncMock, MagicMock
 
-from radarr_manager.services.sync import SyncService
-from radarr_manager.models import MovieSuggestion, SyncSummary
+import httpx
+import pytest
+
 from radarr_manager.clients.radarr import RadarrClient
+from radarr_manager.models import MovieSuggestion, SyncSummary
+from radarr_manager.services.sync import SyncService
 from tests.fixtures.radarr_responses import (
-    MOVIE_LOOKUP_RESPONSE,
+    ADD_MOVIE_SUCCESS_RESPONSE,
     EMPTY_MOVIE_LOOKUP_RESPONSE,
     MOVIE_LIST_RESPONSE,
-    ADD_MOVIE_SUCCESS_RESPONSE,
+    MOVIE_LOOKUP_RESPONSE,
 )
 
 
@@ -431,7 +432,8 @@ class TestSyncService:
 
         result = await sync_service.sync(sample_suggestions, dry_run=False, force=False)
 
-        # One queued (Dune), two skipped (Unknown Movie - no results, Future Release - no date + invalid year)
+        # One queued (Dune); two skipped: Unknown Movie (no results),
+        # Future Release (no date + invalid year)
         assert len(result.queued) == 1
         assert result.queued[0] == "Dune: Part Two"
         assert len(result.skipped) == 2

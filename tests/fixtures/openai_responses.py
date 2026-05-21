@@ -1,7 +1,5 @@
 """Fixture data for OpenAI API responses."""
 
-from typing import Any
-
 VALID_JSON_RESPONSE = {
     "suggestions": [
         {

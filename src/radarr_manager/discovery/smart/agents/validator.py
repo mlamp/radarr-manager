@@ -152,9 +152,7 @@ class SmartValidatorAgent(SmartAgent):
             duplicates_merged = 0
             if deduplicate and valid_movies:
                 valid_movies, duplicates_merged = self._deduplicate(valid_movies)
-                self._log(
-                    f"Deduplication: merged {duplicates_merged}, {len(valid_movies)} unique"
-                )
+                self._log(f"Deduplication: merged {duplicates_merged}, {len(valid_movies)} unique")
 
             # Phase 3: Enrichment and library/re-release/foreign filtering
             in_library_count = 0
@@ -296,9 +294,8 @@ class SmartValidatorAgent(SmartAgent):
                     radarr_id = lookup.get("id")
                     in_library = radarr_id is not None
                     actual_year = lookup.get("year")
-                    is_rerelease = (
-                        actual_year is not None
-                        and actual_year < (current_year - RE_RELEASE_THRESHOLD_YEARS)
+                    is_rerelease = actual_year is not None and actual_year < (
+                        current_year - RE_RELEASE_THRESHOLD_YEARS
                     )
 
                     # Extract original language
@@ -341,9 +338,7 @@ class SmartValidatorAgent(SmartAgent):
 
                     # Check if foreign film is exceptional (8.0+ IMDB AND 20k+ votes)
                     is_exceptional_foreign = (
-                        imdb_rating is not None
-                        and imdb_rating >= 8.0
-                        and imdb_votes >= 20000
+                        imdb_rating is not None and imdb_rating >= 8.0 and imdb_votes >= 20000
                     )
 
                     # Filter based on criteria
@@ -364,9 +359,7 @@ class SmartValidatorAgent(SmartAgent):
                         movie.rejection_reason = "foreign"
                         foreign_count += 1
                         rejected.append(movie)
-                        self._log(
-                            f"Filtered (foreign '{original_language_name}'): {movie.title}"
-                        )
+                        self._log(f"Filtered (foreign '{original_language_name}'): {movie.title}")
                     else:
                         valid.append(movie)
 

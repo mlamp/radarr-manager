@@ -2,7 +2,6 @@
 
 import os
 from datetime import date
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -184,9 +183,10 @@ class TestAddMovieTool:
             root_folder_path="/movies",
         )
 
-        with patch("radarr_manager.mcp.server.RadarrClient") as mock_client, patch(
-            "radarr_manager.mcp.server.DeepAnalysisService"
-        ) as mock_analysis:
+        with (
+            patch("radarr_manager.mcp.server.RadarrClient") as mock_client,
+            patch("radarr_manager.mcp.server.DeepAnalysisService") as mock_analysis,
+        ):
             # Mock RadarrClient
             mock_radarr = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_radarr
@@ -245,9 +245,10 @@ class TestAddMovieTool:
             root_folder_path="/movies",
         )
 
-        with patch("radarr_manager.mcp.server.RadarrClient") as mock_client, patch(
-            "radarr_manager.mcp.server.DeepAnalysisService"
-        ) as mock_analysis:
+        with (
+            patch("radarr_manager.mcp.server.RadarrClient") as mock_client,
+            patch("radarr_manager.mcp.server.DeepAnalysisService") as mock_analysis,
+        ):
             # Mock RadarrClient
             mock_radarr = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_radarr
@@ -306,9 +307,10 @@ class TestAddMovieTool:
             root_folder_path="/movies",
         )
 
-        with patch("radarr_manager.mcp.server.RadarrClient") as mock_client, patch(
-            "radarr_manager.mcp.server.DeepAnalysisService"
-        ) as mock_analysis:
+        with (
+            patch("radarr_manager.mcp.server.RadarrClient") as mock_client,
+            patch("radarr_manager.mcp.server.DeepAnalysisService") as mock_analysis,
+        ):
             mock_radarr = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_radarr
 
@@ -357,9 +359,10 @@ class TestAnalyzeQualityTool:
             radarr_api_key="test-key",
         )
 
-        with patch("radarr_manager.mcp.server.RadarrClient") as mock_client, patch(
-            "radarr_manager.mcp.server.DeepAnalysisService"
-        ) as mock_analysis:
+        with (
+            patch("radarr_manager.mcp.server.RadarrClient") as mock_client,
+            patch("radarr_manager.mcp.server.DeepAnalysisService") as mock_analysis,
+        ):
             # Mock RadarrClient
             mock_radarr = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_radarr
@@ -414,9 +417,10 @@ class TestDiscoverMoviesTool:
             openai_model="gpt-4o",
         )
 
-        with patch("radarr_manager.mcp.server.build_provider") as mock_provider, patch(
-            "radarr_manager.mcp.server.DiscoveryService"
-        ) as mock_discovery:
+        with (
+            patch("radarr_manager.mcp.server.build_provider") as mock_provider,
+            patch("radarr_manager.mcp.server.DiscoveryService") as mock_discovery,
+        ):
             # Mock provider
             provider_instance = MagicMock()
             mock_provider.return_value = provider_instance
@@ -465,11 +469,12 @@ class TestSyncMoviesTool:
             root_folder_path="/movies",
         )
 
-        with patch("radarr_manager.mcp.server.build_provider") as mock_provider, patch(
-            "radarr_manager.mcp.server.DiscoveryService"
-        ) as mock_discovery_service, patch(
-            "radarr_manager.mcp.server.RadarrClient"
-        ) as mock_client, patch("radarr_manager.mcp.server.SyncService") as mock_sync:
+        with (
+            patch("radarr_manager.mcp.server.build_provider") as mock_provider,
+            patch("radarr_manager.mcp.server.DiscoveryService") as mock_discovery_service,
+            patch("radarr_manager.mcp.server.RadarrClient") as mock_client,
+            patch("radarr_manager.mcp.server.SyncService") as mock_sync,
+        ):
             # Mock provider
             provider_instance = MagicMock()
             mock_provider.return_value = provider_instance

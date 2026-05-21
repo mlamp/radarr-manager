@@ -1,6 +1,7 @@
 """Tests for the SmartOrchestrator."""
 
 import json
+
 import pytest
 import respx
 from httpx import Response
@@ -66,11 +67,13 @@ class TestSmartOrchestratorDeterministic:
                         {
                             "content": [
                                 {
-                                    "text": json.dumps({
-                                        "movies": [
-                                            {"title": "Search Movie", "year": 2024},
-                                        ]
-                                    })
+                                    "text": json.dumps(
+                                        {
+                                            "movies": [
+                                                {"title": "Search Movie", "year": 2024},
+                                            ]
+                                        }
+                                    )
                                 }
                             ]
                         }
@@ -87,12 +90,18 @@ class TestSmartOrchestratorDeterministic:
                     "choices": [
                         {
                             "message": {
-                                "content": json.dumps({
-                                    "ranked_movies": [
-                                        {"title": "Search Movie", "year": 2024, "confidence": 0.9},
-                                    ],
-                                    "excluded_movies": [],
-                                })
+                                "content": json.dumps(
+                                    {
+                                        "ranked_movies": [
+                                            {
+                                                "title": "Search Movie",
+                                                "year": 2024,
+                                                "confidence": 0.9,
+                                            },
+                                        ],
+                                        "excluded_movies": [],
+                                    }
+                                )
                             }
                         }
                     ]
@@ -147,23 +156,27 @@ class TestSmartOrchestratorWithLLM:
                                             "id": "call_1",
                                             "function": {
                                                 "name": "validate_movies",
-                                                "arguments": json.dumps({
-                                                    "movies": [
-                                                        {"title": "Test Movie", "year": 2024}
-                                                    ]
-                                                }),
+                                                "arguments": json.dumps(
+                                                    {
+                                                        "movies": [
+                                                            {"title": "Test Movie", "year": 2024}
+                                                        ]
+                                                    }
+                                                ),
                                             },
                                         },
                                         {
                                             "id": "call_2",
                                             "function": {
                                                 "name": "rank_movies",
-                                                "arguments": json.dumps({
-                                                    "movies": [
-                                                        {"title": "Test Movie", "year": 2024}
-                                                    ],
-                                                    "limit": 5,
-                                                }),
+                                                "arguments": json.dumps(
+                                                    {
+                                                        "movies": [
+                                                            {"title": "Test Movie", "year": 2024}
+                                                        ],
+                                                        "limit": 5,
+                                                    }
+                                                ),
                                             },
                                         },
                                     ],
@@ -179,12 +192,18 @@ class TestSmartOrchestratorWithLLM:
                         "choices": [
                             {
                                 "message": {
-                                    "content": json.dumps({
-                                        "ranked_movies": [
-                                            {"title": "Test Movie", "year": 2024, "confidence": 0.9}
-                                        ],
-                                        "excluded_movies": [],
-                                    })
+                                    "content": json.dumps(
+                                        {
+                                            "ranked_movies": [
+                                                {
+                                                    "title": "Test Movie",
+                                                    "year": 2024,
+                                                    "confidence": 0.9,
+                                                }
+                                            ],
+                                            "excluded_movies": [],
+                                        }
+                                    )
                                 }
                             }
                         ]
@@ -221,6 +240,7 @@ class TestSmartOrchestratorWithLLM:
     @respx.mock
     async def test_orchestrator_max_iterations(self, orchestrator):
         """Test that orchestrator respects max iterations."""
+
         # Mock orchestrator to always return tool calls (infinite loop)
         def mock_orchestrator_response(*args, **kwargs):
             return Response(
@@ -236,9 +256,9 @@ class TestSmartOrchestratorWithLLM:
                                         "id": "call_loop",
                                         "function": {
                                             "name": "validate_movies",
-                                            "arguments": json.dumps({
-                                                "movies": [{"title": "Loop Movie"}]
-                                            }),
+                                            "arguments": json.dumps(
+                                                {"movies": [{"title": "Loop Movie"}]}
+                                            ),
                                         },
                                     }
                                 ],

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from radarr_manager.models import MovieSuggestion
 from radarr_manager.providers.base import MovieDiscoveryProvider, ProviderError
@@ -36,9 +35,7 @@ class HybridDiscoveryProvider(MovieDiscoveryProvider):
         self._openai = openai_provider
         self._debug = debug
 
-    async def discover(
-        self, *, limit: int, region: str | None = None
-    ) -> list[MovieSuggestion]:
+    async def discover(self, *, limit: int, region: str | None = None) -> list[MovieSuggestion]:
         """
         Discover movies using hybrid scraper + LLM approach.
 
@@ -59,22 +56,16 @@ class HybridDiscoveryProvider(MovieDiscoveryProvider):
         openai_suggestions: list[MovieSuggestion] = []
         if self._openai:
             try:
-                openai_suggestions = await self._openai.discover(
-                    limit=limit, region=region
-                )
+                openai_suggestions = await self._openai.discover(limit=limit, region=region)
                 if self._debug:
-                    logger.info(
-                        f"[HYBRID] OpenAI found {len(openai_suggestions)} movies"
-                    )
+                    logger.info(f"[HYBRID] OpenAI found {len(openai_suggestions)} movies")
             except ProviderError as exc:
                 if self._debug:
                     logger.warning(f"[HYBRID] OpenAI discovery failed: {exc}")
                 # Continue with just scraped movies
 
         # Step 3: Convert scraped movies to suggestions
-        scraped_suggestions = [
-            self._scraped_to_suggestion(movie) for movie in scraped_movies
-        ]
+        scraped_suggestions = [self._scraped_to_suggestion(movie) for movie in scraped_movies]
 
         # Step 4: Merge and deduplicate (OpenAI suggestions take precedence for metadata)
         merged = self._merge_suggestions(scraped_suggestions, openai_suggestions)

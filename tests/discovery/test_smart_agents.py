@@ -1,19 +1,19 @@
 """Tests for smart agents."""
 
 import json
+
 import pytest
 import respx
 from httpx import Response
 
 from radarr_manager.discovery.smart.agents import (
     SmartFetchAgent,
+    SmartRankerAgent,
     SmartSearchAgent,
     SmartValidatorAgent,
-    SmartRankerAgent,
 )
 from radarr_manager.discovery.smart.protocol import (
     AgentType,
-    MovieData,
     ReportStatus,
 )
 
@@ -229,12 +229,14 @@ class TestSmartSearchAgent:
                 {
                     "content": [
                         {
-                            "text": json.dumps({
-                                "movies": [
-                                    {"title": "Nosferatu", "year": 2024, "confidence": 0.9},
-                                    {"title": "Smile 2", "year": 2024, "confidence": 0.85},
-                                ]
-                            })
+                            "text": json.dumps(
+                                {
+                                    "movies": [
+                                        {"title": "Nosferatu", "year": 2024, "confidence": 0.9},
+                                        {"title": "Smile 2", "year": 2024, "confidence": 0.85},
+                                    ]
+                                }
+                            )
                         }
                     ]
                 }
@@ -310,15 +312,22 @@ class TestSmartRankerAgent:
             "choices": [
                 {
                     "message": {
-                        "content": json.dumps({
-                            "ranked_movies": [
-                                {"title": "Best Movie", "year": 2024, "confidence": 0.95, "overview": "Great film"},
-                                {"title": "Good Movie", "year": 2024, "confidence": 0.8},
-                            ],
-                            "excluded_movies": [
-                                {"title": "Bad Movie", "reason": "Doesn't fit criteria"},
-                            ],
-                        })
+                        "content": json.dumps(
+                            {
+                                "ranked_movies": [
+                                    {
+                                        "title": "Best Movie",
+                                        "year": 2024,
+                                        "confidence": 0.95,
+                                        "overview": "Great film",
+                                    },
+                                    {"title": "Good Movie", "year": 2024, "confidence": 0.8},
+                                ],
+                                "excluded_movies": [
+                                    {"title": "Bad Movie", "reason": "Doesn't fit criteria"},
+                                ],
+                            }
+                        )
                     }
                 }
             ]

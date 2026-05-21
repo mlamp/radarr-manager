@@ -1,20 +1,19 @@
 """Tests for Radarr client functionality."""
 
-import pytest
 import httpx
+import pytest
 import respx
-from unittest.mock import AsyncMock
 
 from radarr_manager.clients.radarr import RadarrClient, build_add_movie_payload, radarr_client
 from tests.fixtures.radarr_responses import (
-    SYSTEM_STATUS_RESPONSE,
-    MOVIE_LOOKUP_RESPONSE,
+    ADD_MOVIE_ERROR_RESPONSE,
+    ADD_MOVIE_SUCCESS_RESPONSE,
     EMPTY_MOVIE_LOOKUP_RESPONSE,
     MOVIE_LIST_RESPONSE,
-    ROOT_FOLDERS_RESPONSE,
+    MOVIE_LOOKUP_RESPONSE,
     QUALITY_PROFILES_RESPONSE,
-    ADD_MOVIE_SUCCESS_RESPONSE,
-    ADD_MOVIE_ERROR_RESPONSE,
+    ROOT_FOLDERS_RESPONSE,
+    SYSTEM_STATUS_RESPONSE,
 )
 
 

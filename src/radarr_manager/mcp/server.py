@@ -10,8 +10,6 @@ from mcp.server.sse import SseServerTransport
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
-logger = logging.getLogger(__name__)
-
 from radarr_manager.clients.radarr import RadarrClient, build_add_movie_payload
 from radarr_manager.config.settings import Settings, load_settings
 from radarr_manager.mcp.schemas import (
@@ -33,6 +31,8 @@ from radarr_manager.providers.factory import build_provider
 from radarr_manager.services.analysis import DeepAnalysisService
 from radarr_manager.services.discovery import DiscoveryService
 from radarr_manager.services.sync import SyncService
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_ratings_metadata(radarr_movie: dict[str, Any]) -> dict[str, Any]:
@@ -232,7 +232,9 @@ def create_mcp_server() -> Server:
 
         logger.info(f"Tool call {name} completed. Returning {len(result)} TextContent items")
         for idx, content in enumerate(result):
-            logger.debug(f"TextContent[{idx}]: type={content.type}, text_length={len(content.text)}")
+            logger.debug(
+                f"TextContent[{idx}]: type={content.type}, text_length={len(content.text)}"
+            )
 
         return result
 
@@ -496,9 +498,7 @@ async def _discover_movies(settings: Settings, arguments: dict[str, Any]) -> lis
     # Build provider
     provider = build_provider(
         provider_name=settings.llm_provider,
-        openai_api_key=(
-            settings.openai_api_key if settings.openai_api_key else None
-        ),
+        openai_api_key=(settings.openai_api_key if settings.openai_api_key else None),
         openai_model=settings.openai_model,
     )
 
@@ -537,9 +537,7 @@ async def _sync_movies(settings: Settings, arguments: dict[str, Any]) -> list[Te
     # Build provider
     provider = build_provider(
         provider_name=settings.llm_provider,
-        openai_api_key=(
-            settings.openai_api_key if settings.openai_api_key else None
-        ),
+        openai_api_key=(settings.openai_api_key if settings.openai_api_key else None),
         openai_model=settings.openai_model,
     )
 

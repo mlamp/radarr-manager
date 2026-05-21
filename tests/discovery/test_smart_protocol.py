@@ -1,8 +1,5 @@
 """Tests for the smart orchestrator protocol (agent communication format)."""
 
-import json
-import pytest
-
 from radarr_manager.discovery.smart.protocol import (
     AgentReport,
     AgentType,
