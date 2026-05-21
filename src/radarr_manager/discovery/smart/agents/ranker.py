@@ -16,6 +16,7 @@ from radarr_manager.discovery.smart.protocol import (
     ReportSection,
     ReportStatus,
 )
+from radarr_manager.discovery.smart.usage import LLMCall, UsageCollector
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +96,12 @@ Return ONLY valid JSON, no markdown or explanations."""
         api_key: str | None = None,
         model: str = "gpt-4o-mini",
         debug: bool = False,
+        usage: UsageCollector | None = None,
     ) -> None:
         super().__init__(debug)
         self._api_key = api_key
         self._model = model
+        self._usage = usage
 
     async def execute(self, **kwargs: Any) -> AgentReport:
         """
@@ -255,6 +258,16 @@ Return ONLY valid JSON, no markdown or explanations."""
             )
             response.raise_for_status()
             data = response.json()
+
+        if self._usage is not None:
+            try:
+                self._usage.record(
+                    LLMCall.from_chat_completions(
+                        component="ranker_agent", model=self._model, data=data
+                    )
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to record ranker usage: %s", exc)
 
         response_text = data["choices"][0]["message"]["content"]
         result = json.loads(response_text)

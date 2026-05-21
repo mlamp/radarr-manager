@@ -18,6 +18,7 @@ from radarr_manager.discovery.smart.protocol import (
 )
 
 if TYPE_CHECKING:
+    from radarr_manager.clients.radarr import LibraryIndex
     from radarr_manager.scrapers.base import ScraperProvider
 
 logger = logging.getLogger(__name__)
@@ -59,11 +60,15 @@ class SmartFetchAgent(SmartAgent):
         api_url: str = "http://localhost:11235",
         api_key: str | None = None,
         debug: bool = False,
+        library_index: LibraryIndex | None = None,
     ) -> None:
         super().__init__(debug)
         self._scraper = scraper
         self._api_url = api_url
         self._api_key = api_key
+        # Pushed in by the orchestrator at discover() time; may be None when
+        # Radarr is not configured.
+        self._library_index: LibraryIndex | None = library_index
 
     async def execute(self, **kwargs: Any) -> AgentReport:
         """
@@ -99,7 +104,7 @@ class SmartFetchAgent(SmartAgent):
                 self._log(f"Parsed {len(parsed_movies)} movies")
 
                 # Convert to MovieData
-                movies: list[MovieData] = []
+                all_converted: list[MovieData] = []
                 for pm in parsed_movies[:max_movies]:
                     # Extract ratings from extra field if present
                     ratings = {}
@@ -114,7 +119,7 @@ class SmartFetchAgent(SmartAgent):
                             if k not in ("imdb_rating", "imdb_votes"):
                                 metadata[k] = v
 
-                    movies.append(
+                    all_converted.append(
                         MovieData(
                             title=pm.title,
                             year=pm.year,
@@ -124,6 +129,21 @@ class SmartFetchAgent(SmartAgent):
                             metadata=metadata,
                         )
                     )
+
+                # Pre-filter against the library index when available so the
+                # orchestrator doesn't waste an iteration validating titles
+                # the user already owns.
+                pre_filtered_count = 0
+                movies: list[MovieData]
+                if self._library_index is not None and self._library_index.total_count > 0:
+                    movies = []
+                    for movie in all_converted:
+                        if self._library_index.is_owned(title=movie.title, year=movie.year):
+                            pre_filtered_count += 1
+                            continue
+                        movies.append(movie)
+                else:
+                    movies = all_converted
 
                 # Build report sections
                 sections = [
@@ -136,6 +156,16 @@ class SmartFetchAgent(SmartAgent):
                         ),
                     ),
                 ]
+                if pre_filtered_count:
+                    sections.append(
+                        ReportSection(
+                            heading="Pre-filter",
+                            content=(
+                                f"- Removed {pre_filtered_count} title(s) already in the "
+                                "user's Radarr library before returning."
+                            ),
+                        )
+                    )
 
                 return AgentReport(
                     agent_type=self.agent_type,
@@ -147,6 +177,7 @@ class SmartFetchAgent(SmartAgent):
                     stats={
                         "raw_parsed": len(parsed_movies),
                         "returned": len(movies),
+                        "pre_filtered_in_library": pre_filtered_count,
                         "content_size_bytes": content_size,
                     },
                     execution_time_ms=timer.elapsed_ms,

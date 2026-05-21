@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from radarr_manager.clients.radarr import LibraryIndex, build_library_index, radarr_client
 from radarr_manager.discovery.smart.orchestrator import (
     SmartOrchestrator,
     SmartOrchestratorConfig,
@@ -160,11 +161,27 @@ class SmartAgenticProvider(MovieDiscoveryProvider):
             logger.info(f"[SMART-AGENTIC] Discovery prompt: {prompt}")
             logger.info(f"[SMART-AGENTIC] Limit: {limit}, Region: {region}")
 
+        # Snapshot the Radarr library once per run so the orchestrator and
+        # agents can short-circuit owned titles without per-title HTTP calls.
+        # build_library_index returns an empty index on failure, so this is
+        # safe to skip past unconditionally.
+        library_index: LibraryIndex | None = None
+        cfg = self._orchestrator._config
+        if cfg.has_radarr:
+            async with radarr_client(
+                base_url=cfg.radarr_base_url,
+                api_key=cfg.radarr_api_key,
+            ) as client:
+                library_index = await build_library_index(client)
+            if self._debug:
+                logger.info(f"[SMART-AGENTIC] Library snapshot: {library_index.total_count} titles")
+
         # Run the orchestrator
         suggestions = await self._orchestrator.discover(
             prompt=prompt,
             limit=limit,
             region=region,
+            library_index=library_index,
         )
 
         if self._debug:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from radarr_manager.discovery.smart.agents.base import SmartAgent, TimedExecution
 from radarr_manager.discovery.smart.protocol import (
@@ -17,6 +17,9 @@ from radarr_manager.discovery.smart.protocol import (
 from radarr_manager.discovery.validation import (
     validate_title,
 )
+
+if TYPE_CHECKING:
+    from radarr_manager.clients.radarr import LibraryIndex
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +70,14 @@ class SmartValidatorAgent(SmartAgent):
         radarr_base_url: str | None = None,
         radarr_api_key: str | None = None,
         debug: bool = False,
+        library_index: LibraryIndex | None = None,
     ) -> None:
         super().__init__(debug)
         self._radarr_base_url = radarr_base_url
         self._radarr_api_key = radarr_api_key
+        # Pushed in by the orchestrator at discover() time; may be None when
+        # Radarr is not configured.
+        self._library_index: LibraryIndex | None = library_index
 
     async def execute(self, **kwargs: Any) -> AgentReport:
         """
@@ -284,6 +291,23 @@ class SmartValidatorAgent(SmartAgent):
             api_key=self._radarr_api_key,
         ) as client:
             for movie in movies:
+                # Fast path: skip the Radarr lookup entirely if the snapshot
+                # already says this title is owned. Saves a per-title HTTP call
+                # without changing the rejection breakdown surface.
+                if (
+                    filter_in_library
+                    and self._library_index is not None
+                    and self._library_index.is_owned(title=movie.title, year=movie.year)
+                ):
+                    movie.is_valid = False
+                    movie.rejection_reason = "in_library"
+                    movie.metadata["in_library"] = True
+                    movie.metadata["in_library_source"] = "library_index"
+                    in_library_count += 1
+                    rejected.append(movie)
+                    self._log(f"Filtered (in library, index): {movie.title}")
+                    continue
+
                 try:
                     results = await client.lookup_movie(movie.title)
                     if not results:

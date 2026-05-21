@@ -18,6 +18,7 @@ from radarr_manager.discovery.smart.protocol import (
     ReportSection,
     ReportStatus,
 )
+from radarr_manager.discovery.smart.usage import LLMCall, UsageCollector
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +96,12 @@ Your response should be a readable report with embedded structured data:
         api_key: str | None = None,
         model: str = "gpt-4o-mini",
         debug: bool = False,
+        usage: UsageCollector | None = None,
     ) -> None:
         super().__init__(debug)
         self._api_key = api_key
         self._model = model
+        self._usage = usage
 
     async def execute(self, **kwargs: Any) -> AgentReport:
         """
@@ -233,6 +236,14 @@ Your response should be a readable report with embedded structured data:
             )
             response.raise_for_status()
             data = response.json()
+
+        if self._usage is not None:
+            try:
+                self._usage.record(
+                    LLMCall.from_responses(component="search_agent", model=self._model, data=data)
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to record search usage: %s", exc)
 
         # Extract the full markdown response
         raw_markdown = self._extract_full_response(data)

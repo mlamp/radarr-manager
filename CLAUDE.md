@@ -65,6 +65,26 @@ Key environment variables (copy `.env.example` to `.env`):
 2. **Sync**: `SyncService` takes suggestions and adds them to Radarr (with duplicate detection)
 3. **Provider Pattern**: Factory creates provider instances based on config/CLI overrides
 
+### Library-aware Discovery (v1.15.0+)
+
+Per-run flow now snapshots the Radarr library once via
+`radarr_manager.clients.radarr.build_library_index(client) -> LibraryIndex` and threads
+that `LibraryIndex` into the orchestrator and into the fetch + validator agents. Agents
+short-circuit owned titles before any per-title Radarr lookups. The orchestrator also:
+
+- Injects a "## Your User's Library" block into the system prompt (count + recent-title
+  sample) so the LLM can avoid suggesting owned titles.
+- Dedupes `validate_movies` arguments across iterations using
+  `(normalized_title, year)` — items without a known year never dedupe.
+- Triggers adaptive early-exit after 2 consecutive iterations of zero valid candidates
+  + ≥5 in-library filtered, starting no earlier than iteration 3.
+- Emits a single `RUN_SUMMARY {json}` line at the end of every run.
+
+Token / cost telemetry lives in `radarr_manager.discovery.smart.usage.UsageCollector`.
+Pass it through to any new component that calls an LLM (see `SmartSearchAgent` /
+`SmartRankerAgent` for the convention). Prices live in `MODEL_PRICES_USD_PER_1K` with a
+`PRICING_AS_OF` marker — update both when prices drift.
+
 ### Smart Agentic Discovery (v1.12.0+)
 
 The `smart_agentic` discovery mode uses an LLM orchestrator pattern:

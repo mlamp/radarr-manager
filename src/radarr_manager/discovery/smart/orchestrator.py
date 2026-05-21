@@ -41,10 +41,12 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import date
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import httpx
 
+from radarr_manager.clients.radarr import LibraryIndex
 from radarr_manager.discovery.smart.agents import (
     SmartFetchAgent,
     SmartRankerAgent,
@@ -56,9 +58,18 @@ from radarr_manager.discovery.smart.protocol import (
     MovieData,
     ToolResult,
 )
+from radarr_manager.discovery.smart.usage import LLMCall, UsageCollector
 from radarr_manager.models.movie import MovieSuggestion
 
 logger = logging.getLogger(__name__)
+
+# Adaptive early-exit thresholds. We require two consecutive iterations of
+# library-saturated results (zero valid candidates AND ≥N filtered as in-library)
+# starting no earlier than iteration N below — this protects against killing
+# late-recovery runs like the Apr-05 case where iter 4 produced 7 candidates
+# after several quieter iterations.
+EARLY_EXIT_MIN_ITERATION = 3
+EARLY_EXIT_IN_LIBRARY_THRESHOLD = 5
 
 
 @dataclass
@@ -106,7 +117,7 @@ class ConversationMessage:
     name: str | None = None  # Tool name for tool results
 
 
-ORCHESTRATOR_SYSTEM_PROMPT = """\
+BASE_ORCHESTRATOR_SYSTEM_PROMPT = """\
 You are a smart movie discovery orchestrator. Your job is to help users find \
 HIGH-QUALITY, MAINSTREAM movies by coordinating specialized agents.
 
@@ -181,6 +192,43 @@ but NOT excessively more. Avoid fetching 70+ movies when user only wants 25.
 """
 
 
+def _render_library_block(index: LibraryIndex) -> str:
+    """Render a compact 'user's library' block injected into the system prompt.
+
+    Keeps the system prompt within a sensible token budget by capping recent
+    titles at the configured sample size (50 by default).
+    """
+    if index.total_count == 0:
+        return ""
+    anchors = ", ".join(index.recent_titles) if index.recent_titles else "(none recorded)"
+    return (
+        "\n\n## Your User's Library\n"
+        f"The user already owns {index.total_count} movies. Do NOT suggest titles "
+        "they already have.\n"
+        f"Recently added (taste anchor sample): {anchors}\n"
+        "Strategy: prioritize 2025+/festival titles, niche awards-circuit films, "
+        "and recent A24/NEON/MUBI selections that are unlikely to be in a mature library."
+    )
+
+
+def _candidate_key(item: dict[str, Any]) -> tuple[str, int] | None:
+    """Compute the (normalized_title, year) dedup key, or None if year is unknown."""
+    title = item.get("title")
+    year = item.get("year")
+    if not isinstance(title, str) or not title:
+        return None
+    if not isinstance(year, int) or year <= 0:
+        return None
+    return (title.strip().lower(), year)
+
+
+def _package_version() -> str:
+    try:
+        return version("radarr-manager")
+    except PackageNotFoundError:
+        return "unknown"
+
+
 class SmartOrchestrator:
     """
     LLM-powered orchestrator that coordinates smart agents.
@@ -197,9 +245,11 @@ class SmartOrchestrator:
         self,
         config: SmartOrchestratorConfig,
         debug: bool = False,
+        usage: UsageCollector | None = None,
     ) -> None:
         self._config = config
         self._debug = debug
+        self._usage = usage or UsageCollector()
 
         # Initialize agents
         self._agents: dict[str, Any] = {
@@ -212,6 +262,7 @@ class SmartOrchestrator:
                 api_key=config.agent_api_key,
                 model=config.agent_model,
                 debug=debug,
+                usage=self._usage,
             ),
             "validate_movies": SmartValidatorAgent(
                 radarr_base_url=config.radarr_base_url,
@@ -222,17 +273,28 @@ class SmartOrchestrator:
                 api_key=config.agent_api_key,
                 model=config.agent_model,
                 debug=debug,
+                usage=self._usage,
             ),
         }
 
         # Build tool definitions for the orchestrator
         self._tools = [agent.get_tool_definition() for agent in self._agents.values()]
 
+    def _inject_library(self, index: LibraryIndex | None) -> None:
+        """Push the library index down to agents that can use it."""
+        self._agents["fetch_movies"]._library_index = index
+        self._agents["validate_movies"]._library_index = index
+
+    @property
+    def usage(self) -> UsageCollector:
+        return self._usage
+
     async def discover(
         self,
         prompt: str,
         limit: int = 10,
         region: str = "US",
+        library_index: LibraryIndex | None = None,
     ) -> list[MovieSuggestion]:
         """
         Discover movies based on a natural language prompt.
@@ -241,10 +303,15 @@ class SmartOrchestrator:
             prompt: User's discovery request (e.g., "Find 10 horror movies for Halloween")
             limit: Maximum number of movies to return
             region: Region for localized results
+            library_index: Optional pre-fetched snapshot of the user's Radarr
+                library; when provided, agents short-circuit owned titles and
+                the orchestrator gets ownership context in its system prompt.
 
         Returns:
             List of MovieSuggestion objects
         """
+        self._inject_library(library_index)
+
         if not self._config.has_orchestrator_llm:
             # Fallback to deterministic mode
             return await self._deterministic_discover(prompt, limit, region)
@@ -255,9 +322,17 @@ class SmartOrchestrator:
         today = date.today()
         date_str = today.strftime("%B %d, %Y")  # e.g., "December 04, 2025"
 
-        # Build initial conversation
+        # Build initial conversation, optionally with a library-context block
+        system_prompt = BASE_ORCHESTRATOR_SYSTEM_PROMPT
+        if library_index is not None and library_index.total_count > 0:
+            system_prompt = system_prompt + _render_library_block(library_index)
+
+        library_hint = ""
+        if library_index is not None and library_index.total_count > 0:
+            library_hint = f"\nLibrary size: {library_index.total_count} (avoid owned titles).\n"
+
         messages: list[ConversationMessage] = [
-            ConversationMessage(role="system", content=ORCHESTRATOR_SYSTEM_PROMPT),
+            ConversationMessage(role="system", content=system_prompt),
             ConversationMessage(
                 role="user",
                 content=(
@@ -266,6 +341,7 @@ class SmartOrchestrator:
                     f"**Limit: {limit} movies** (fetch ~{min(limit * 2, 50)} from IMDB, "
                     f"search ~{min(limit, 15)} additional)\n"
                     f"Region: {region}"
+                    f"{library_hint}"
                 ),
             ),
         ]
@@ -273,6 +349,12 @@ class SmartOrchestrator:
         # Run the reasoning loop
         final_movies: list[MovieData] = []
         iterations = 0
+        seen_dedup_keys: set[tuple[str, int]] = set()
+        validator_saturated_streak = 0
+        outcome = "ok"
+        last_validator_stats: dict[str, Any] = {}
+        total_dedup_skipped = 0
+        total_in_library_filtered = 0
 
         while iterations < self._config.max_iterations:
             iterations += 1
@@ -285,6 +367,12 @@ class SmartOrchestrator:
             if response.tool_calls:
                 tool_names = [tc.get("function", {}).get("name") for tc in response.tool_calls]
                 self._log(f"Tool calls: {tool_names}")
+
+                # Pre-filter validate_movies arguments through the cross-iter dedup set
+                iter_dedup_skipped = self._dedup_validate_calls(
+                    response.tool_calls, seen_dedup_keys
+                )
+                total_dedup_skipped += iter_dedup_skipped
 
                 # Execute tool calls
                 tool_results = await self._execute_tool_calls(response.tool_calls)
@@ -307,6 +395,33 @@ class SmartOrchestrator:
                     if result.tool_name == "rank_movies" and result.success:
                         final_movies = result.report.movies
 
+                    # Track validator stats for early-exit + observability
+                    if result.tool_name == "validate_movies" and result.success:
+                        stats = result.report.stats or {}
+                        last_validator_stats = stats
+                        total_in_library_filtered += int(stats.get("in_library_filtered", 0) or 0)
+
+                # Adaptive early-exit: two consecutive iterations of library
+                # saturation (zero valid AND >= threshold filtered) after the
+                # configured minimum iteration. Protects late-recovery runs.
+                if last_validator_stats:
+                    if (
+                        int(last_validator_stats.get("valid_count", 0) or 0) == 0
+                        and int(last_validator_stats.get("in_library_filtered", 0) or 0)
+                        >= EARLY_EXIT_IN_LIBRARY_THRESHOLD
+                    ):
+                        validator_saturated_streak += 1
+                    else:
+                        validator_saturated_streak = 0
+
+                    if iterations >= EARLY_EXIT_MIN_ITERATION and validator_saturated_streak >= 2:
+                        outcome = "library_saturated"
+                        self._log(
+                            "Early-exit: library saturated for "
+                            f"{validator_saturated_streak} consecutive iterations"
+                        )
+                        break
+
             else:
                 # No more tool calls - orchestrator is done
                 self._log("Orchestrator finished reasoning")
@@ -316,7 +431,57 @@ class SmartOrchestrator:
         suggestions = self._movies_to_suggestions(final_movies)
 
         self._log(f"Returning {len(suggestions)} movie suggestions")
+        self._emit_run_summary(
+            iterations=iterations,
+            outcome=outcome,
+            discovered=len(suggestions),
+            in_library_filtered=total_in_library_filtered,
+            dedup_skipped=total_dedup_skipped,
+            library_size=library_index.total_count if library_index else 0,
+        )
         return suggestions[:limit]
+
+    def _dedup_validate_calls(
+        self,
+        tool_calls: list[dict[str, Any]],
+        seen: set[tuple[str, int]],
+    ) -> int:
+        """Strip already-seen (title, year) candidates from validate_movies inputs.
+
+        Mutates ``tool_calls`` in place (rewrites the JSON arguments string).
+        Returns the count of skipped candidates across all validate_movies calls
+        in this iteration.
+        """
+        skipped_total = 0
+        for tc in tool_calls:
+            fn = tc.get("function", {}) or {}
+            if fn.get("name") != "validate_movies":
+                continue
+            raw = fn.get("arguments") or "{}"
+            try:
+                args = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            movies = args.get("movies")
+            if not isinstance(movies, list):
+                continue
+            kept: list[dict[str, Any]] = []
+            for item in movies:
+                if not isinstance(item, dict):
+                    kept.append(item)
+                    continue
+                key = _candidate_key(item)
+                if key is not None and key in seen:
+                    skipped_total += 1
+                    continue
+                if key is not None:
+                    seen.add(key)
+                kept.append(item)
+            args["movies"] = kept
+            fn["arguments"] = json.dumps(args)
+        if skipped_total:
+            self._log(f"cross-iter dedup: dropped {skipped_total} pre-seen titles")
+        return skipped_total
 
     async def _deterministic_discover(
         self,
@@ -424,6 +589,19 @@ class SmartOrchestrator:
             response.raise_for_status()
             data = response.json()
 
+        # Record usage before unpacking the response so a malformed message
+        # body doesn't lose the accounting.
+        try:
+            self._usage.record(
+                LLMCall.from_chat_completions(
+                    component="orchestrator",
+                    model=self._config.orchestrator_model,
+                    data=data,
+                )
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Failed to record orchestrator usage: %s", exc)
+
         message = data["choices"][0]["message"]
 
         return ConversationMessage(
@@ -525,6 +703,29 @@ class SmartOrchestrator:
             )
 
         return suggestions
+
+    def _emit_run_summary(
+        self,
+        *,
+        iterations: int,
+        outcome: str,
+        discovered: int,
+        in_library_filtered: int,
+        dedup_skipped: int,
+        library_size: int,
+    ) -> None:
+        """Emit a single greppable JSON line summarizing the run."""
+        summary = {
+            "version": _package_version(),
+            "iterations": iterations,
+            "outcome": outcome,
+            "discovered": discovered,
+            "in_library_filtered": in_library_filtered,
+            "dedup_skipped": dedup_skipped,
+            "library_size": library_size,
+            "usage": self._usage.to_summary_dict(),
+        }
+        logger.info("RUN_SUMMARY %s", json.dumps(summary, default=str))
 
     def _log(self, message: str) -> None:
         """Log a debug message if debugging is enabled."""

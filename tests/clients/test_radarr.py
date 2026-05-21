@@ -1,10 +1,18 @@
 """Tests for Radarr client functionality."""
 
+from unittest.mock import AsyncMock
+
 import httpx
 import pytest
 import respx
 
-from radarr_manager.clients.radarr import RadarrClient, build_add_movie_payload, radarr_client
+from radarr_manager.clients.radarr import (
+    LibraryIndex,
+    RadarrClient,
+    build_add_movie_payload,
+    build_library_index,
+    radarr_client,
+)
 from tests.fixtures.radarr_responses import (
     ADD_MOVIE_ERROR_RESPONSE,
     ADD_MOVIE_SUCCESS_RESPONSE,
@@ -236,6 +244,99 @@ class TestRadarrClient:
         async with radarr_client("http://localhost:7878", "test-key") as client:
             assert isinstance(client, RadarrClient)
             assert client._client is not None
+
+
+class TestLibraryIndex:
+    """LibraryIndex value object: ownership lookup policy + recent-title sampling."""
+
+    def test_from_movies_extracts_tmdb_and_title_year(self):
+        index = LibraryIndex.from_movies(
+            [
+                {
+                    "title": "The Matrix",
+                    "year": 1999,
+                    "tmdbId": 603,
+                    "added": "2024-01-01T00:00:00Z",
+                },
+                {
+                    "title": "Inception",
+                    "year": 2010,
+                    "tmdbId": 27205,
+                    "added": "2024-06-01T00:00:00Z",
+                },
+            ]
+        )
+        assert index.total_count == 2
+        assert 603 in index.tmdb_ids
+        assert 27205 in index.tmdb_ids
+        assert ("the matrix", 1999) in index.title_year_keys
+
+    def test_is_owned_by_tmdb_short_circuits(self):
+        index = LibraryIndex.from_movies([{"title": "X", "year": 1999, "tmdbId": 603}])
+        assert index.is_owned(tmdb_id=603) is True
+        assert index.is_owned(tmdb_id=999) is False
+
+    def test_is_owned_requires_title_AND_year(self):
+        """Title without year never matches — defers to validator's per-title lookup."""
+        index = LibraryIndex.from_movies([{"title": "Dracula", "year": 1992, "tmdbId": 19063}])
+        assert index.is_owned(title="Dracula", year=1992) is True
+        assert index.is_owned(title="Dracula", year=2025) is False
+        assert index.is_owned(title="Dracula") is False  # year unknown
+        assert index.is_owned(title="dracula", year=1992) is True  # case-insensitive
+        assert index.is_owned(title="DRACULA!", year=1992) is True  # punctuation-insensitive
+
+    def test_recent_titles_sorted_by_added_desc(self):
+        index = LibraryIndex.from_movies(
+            [
+                {"title": "Old", "year": 2000, "added": "2020-01-01T00:00:00Z"},
+                {"title": "New", "year": 2025, "added": "2026-05-01T00:00:00Z"},
+                {"title": "Mid", "year": 2020, "added": "2022-06-01T00:00:00Z"},
+            ]
+        )
+        assert index.recent_titles[0] == "New"
+        assert index.recent_titles[-1] == "Old"
+
+    def test_missing_or_bogus_fields_are_skipped(self):
+        index = LibraryIndex.from_movies(
+            [
+                {"title": "Good", "year": 2020, "tmdbId": 1},
+                {"title": "NoYear", "tmdbId": 2},  # missing year
+                {"year": 2021, "tmdbId": 3},  # missing title
+                {"title": "BadTmdb", "year": 2022, "tmdbId": "not-an-int"},
+                {"title": "ZeroTmdb", "year": 2023, "tmdbId": 0},
+            ]
+        )
+        assert 1 in index.tmdb_ids
+        assert 2 in index.tmdb_ids  # tmdbId is fine; missing year just means no title_year key
+        assert ("noyear", None) not in {(t, y) for t, y in index.title_year_keys}
+        assert ("good", 2020) in index.title_year_keys
+        assert ("badtmdb", 2022) in index.title_year_keys
+
+    def test_empty_index(self):
+        idx = LibraryIndex.empty()
+        assert idx.total_count == 0
+        assert idx.is_owned(title="anything", year=2025) is False
+        assert idx.is_owned(tmdb_id=1) is False
+
+
+class TestBuildLibraryIndex:
+    """build_library_index wraps list_movies in error-safe semantics."""
+
+    @pytest.mark.asyncio
+    async def test_success_path(self):
+        client = AsyncMock()
+        client.list_movies.return_value = [{"title": "X", "year": 1999, "tmdbId": 603}]
+        index = await build_library_index(client)
+        assert index.total_count == 1
+        assert 603 in index.tmdb_ids
+
+    @pytest.mark.asyncio
+    async def test_failure_returns_empty_index(self):
+        client = AsyncMock()
+        client.list_movies.side_effect = httpx.ConnectError("radarr unreachable")
+        index = await build_library_index(client)
+        assert index.total_count == 0
+        assert isinstance(index, LibraryIndex)
 
 
 class TestBuildAddMoviePayload:

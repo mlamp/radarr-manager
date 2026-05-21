@@ -342,12 +342,19 @@ def _safe_build_provider(settings: Settings, override: str | None, debug: bool =
 
 
 def _setup_logging(level: int = logging.INFO) -> None:
-    """Configure logging for debug mode."""
+    """Configure logging for debug mode.
+
+    Demotes httpx INFO chatter (one line per HTTP request) to WARNING when
+    we're not in DEBUG mode — keeps the high-signal `[SMART-*]` and
+    `RUN_SUMMARY` lines without hundreds of `HTTP Request: GET ...` lines.
+    """
     logging.basicConfig(
         format="%(message)s",
         level=level,
         force=True,
     )
+    httpx_level = logging.INFO if level <= logging.DEBUG else logging.WARNING
+    logging.getLogger("httpx").setLevel(httpx_level)
 
 
 def _render_discover_results(

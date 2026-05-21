@@ -9,6 +9,10 @@ CLI toolkit for sourcing blockbuster releases via LLM providers and synchronizin
   - Scrapes Rotten Tomatoes (theaters + streaming) and IMDB moviemeter
   - Supports Crawl4AI (default) or Firecrawl as scraping backends
   - Merges scraped titles with OpenAI suggestions for best coverage
+- 📚 **Library-aware discovery (v1.15.0+)**: Snapshots your Radarr library once per run and
+  pushes ownership down to the fetch and validator agents, so the orchestrator stops re-suggesting
+  titles you already have. Also adds a `RUN_SUMMARY` JSON log line per run with iterations,
+  outcome, token usage, and estimated cost (`cost_usd_estimated`, prices as of source date).
 - 🧠 **Smart Agentic Discovery Mode (v1.12.0+)**: LLM orchestrator coordinates specialized agents
   - GPT-4o orchestrator reasons about which agents to call and in what order
   - Fetches from IMDB moviemeter (top 10/50/100 most popular)
